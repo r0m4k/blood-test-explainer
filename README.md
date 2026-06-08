@@ -28,3 +28,31 @@ The final experience should feel calm, trustworthy, and useful:
 - Generate thoughtful questions to bring to a doctor or healthcare provider.
 
 The long-term vision is to make medical paperwork less intimidating and help people move from confusion to informed action.
+
+## First App Version
+
+The first version focuses only on extraction: upload a lab report and convert it into structured raw values such as marker name, value, unit, reference range, status, source snippet, and confidence.
+
+Local setup:
+
+```bash
+pip install -r requirements.txt
+export OPENBMB_API_KEY="your-openbmb-token"
+python app.py
+```
+
+You can also create a local `.env` file:
+
+```text
+OPENBMB_API_KEY=your-openbmb-token
+OPENBMB_API_URL=http://35.203.155.71:8003/v1/chat/completions
+OPENBMB_MODEL=MiniCPM-V-4.6
+```
+
+Hugging Face Space setup:
+
+- Add `OPENBMB_API_KEY` as a Space secret.
+- Optionally set `OPENBMB_API_URL` and `OPENBMB_MODEL` as Space variables.
+- Default endpoint is MiniCPM-V 4.6 through an OpenAI-compatible chat completions API.
+
+This API-backed extractor is temporary. The extraction layer is isolated so it can later be replaced by a local fine-tuned OpenBMB model running through `llama.cpp`.
