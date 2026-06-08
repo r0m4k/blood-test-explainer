@@ -1,0 +1,240 @@
+from __future__ import annotations
+
+import json
+import os
+import re
+from dataclasses import dataclass
+from typing import Any
+
+import requests
+from json_repair import loads as repair_json_loads
+from requests import HTTPError
+
+from src.document_processing import document_to_payload_parts
+from src.local_env import load_local_env
+
+
+load_local_env()
+
+DEFAULT_API_URL = "http://35.203.155.71:8003/v1/chat/completions"
+DEFAULT_MODEL = "MiniCPM-V-4.6"
+
+
+EXTRACTION_PROMPT = """
+You are extracting laboratory test results from a medical document.
+
+Return only valid JSON with this exact shape:
+{
+  "tests": [
+    {
+      "marker": "string",
+      "value": "string",
+      "unit": "string or null",
+      "reference_range": "string or null",
+      "status": "low | normal | high | abnormal | unknown",
+      "source_text": "short source snippet",
+      "confidence": 0.0
+    }
+  ],
+  "notes": ["string"]
+}
+
+Rules:
+- Extract pure lab values only.
+- Do not diagnose, interpret, recommend food, supplements, or exercise.
+- Do not invent missing values.
+- Preserve the units and reference ranges exactly as shown when possible.
+- If a marker is unreadable, omit it or add a short note.
+- Use null for missing units or reference ranges.
+- Confidence must be a number from 0 to 1.
+""".strip()
+
+
+@dataclass(frozen=True)
+class ExtractionResult:
+    tests: list[dict[str, Any]]
+    notes: list[str]
+    raw_response: str
+    request_summary: dict[str, Any]
+
+
+class OpenBMBExtractor:
+    def __init__(
+        self,
+        api_url: str | None = None,
+        model: str | None = None,
+        api_key: str | None = None,
+        timeout_seconds: int = 90,
+    ) -> None:
+        self.api_url = (api_url or os.getenv("OPENBMB_API_URL") or DEFAULT_API_URL).strip()
+        self.model = (model or os.getenv("OPENBMB_MODEL") or DEFAULT_MODEL).strip()
+        self.api_key = _normalize_api_key(api_key or os.getenv("OPENBMB_API_KEY"))
+        self.timeout_seconds = timeout_seconds
+
+    @property
+    def is_configured(self) -> bool:
+        return bool(self.api_key)
+
+    def extract(self, file_path: str, max_pages: int = 3) -> ExtractionResult:
+        if not self.api_key:
+            raise RuntimeError(
+                "OpenBMB API key is not configured. Set OPENBMB_API_KEY locally or add it as a Hugging Face Space secret."
+            )
+
+        document_parts = document_to_payload_parts(file_path, max_pages=max_pages)
+        payload = {
+            "model": self.model,
+            "messages": [
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": EXTRACTION_PROMPT},
+                        *document_parts,
+                    ],
+                }
+            ],
+            "temperature": 0,
+            "max_tokens": 2048,
+        }
+
+        response = requests.post(
+            self.api_url,
+            headers={
+                "Authorization": f"Bearer {self.api_key}",
+                "Content-Type": "application/json",
+            },
+            json=payload,
+            timeout=self.timeout_seconds,
+        )
+        try:
+            response.raise_for_status()
+        except HTTPError as error:
+            if response.status_code == 401:
+                raise RuntimeError(
+                    "OpenBMB rejected the API key with 401 Unauthorized. Check that the token is exact, active, and belongs to this endpoint."
+                ) from error
+            raise
+
+        raw_response = _extract_message_content(response.json())
+        parsed = _parse_json_response(raw_response)
+
+        return ExtractionResult(
+            tests=_normalize_tests(parsed.get("tests", [])),
+            notes=_normalize_notes(parsed.get("notes", [])),
+            raw_response=raw_response,
+            request_summary={
+                "api_url": self.api_url,
+                "model": self.model,
+                "document_parts": len(document_parts),
+                "max_pages": max_pages,
+            },
+        )
+
+
+def _extract_message_content(payload: dict[str, Any]) -> str:
+    try:
+        message = payload["choices"][0]["message"]
+    except (KeyError, IndexError, TypeError) as error:
+        raise ValueError("OpenBMB response did not include choices[0].message.") from error
+
+    content = message.get("content", "")
+    if isinstance(content, str):
+        return content.strip()
+
+    if isinstance(content, list):
+        text_parts = [part.get("text", "") for part in content if isinstance(part, dict)]
+        return "\n".join(text_parts).strip()
+
+    raise ValueError("OpenBMB response message content was not text.")
+
+
+def _normalize_api_key(value: str | None) -> str | None:
+    if not value:
+        return None
+
+    cleaned = value.strip()
+    if cleaned.lower().startswith("bearer "):
+        cleaned = cleaned[7:].strip()
+
+    return cleaned or None
+
+
+def _parse_json_response(text: str) -> dict[str, Any]:
+    cleaned = _strip_code_fence(text)
+    parsed = _loads_model_json(cleaned)
+
+    if not isinstance(parsed, dict):
+        raise ValueError("Model response JSON must be an object.")
+    return parsed
+
+
+def _loads_model_json(text: str) -> Any:
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        try:
+            return json.loads(text, strict=False)
+        except json.JSONDecodeError:
+            match = re.search(r"\{.*\}", text, flags=re.DOTALL)
+            if not match:
+                raise ValueError("Model response did not contain a JSON object.")
+            snippet = match.group(0)
+            try:
+                return json.loads(snippet)
+            except json.JSONDecodeError:
+                try:
+                    return json.loads(snippet, strict=False)
+                except json.JSONDecodeError:
+                    return repair_json_loads(snippet)
+
+
+def _strip_code_fence(text: str) -> str:
+    stripped = text.strip()
+    if stripped.startswith("```"):
+        stripped = re.sub(r"^```(?:json)?\s*", "", stripped, flags=re.IGNORECASE)
+        stripped = re.sub(r"\s*```$", "", stripped)
+    return stripped.strip()
+
+
+def _normalize_tests(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+
+    tests: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        tests.append(
+            {
+                "marker": str(item.get("marker") or "").strip(),
+                "value": str(item.get("value") or "").strip(),
+                "unit": _optional_string(item.get("unit")),
+                "reference_range": _optional_string(item.get("reference_range")),
+                "status": str(item.get("status") or "unknown").strip().lower(),
+                "source_text": _optional_string(item.get("source_text")),
+                "confidence": _confidence(item.get("confidence")),
+            }
+        )
+
+    return [test for test in tests if test["marker"] and test["value"]]
+
+
+def _normalize_notes(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    return [str(note).strip() for note in value if str(note).strip()]
+
+
+def _optional_string(value: Any) -> str | None:
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
+def _confidence(value: Any) -> float:
+    try:
+        score = float(value)
+    except (TypeError, ValueError):
+        return 0.0
+    return max(0.0, min(1.0, score))
