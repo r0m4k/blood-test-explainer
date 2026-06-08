@@ -1,3 +1,15 @@
+---
+title: Blood Test Explainer
+emoji: 📊
+colorFrom: green
+colorTo: green
+sdk: gradio
+sdk_version: 6.17.3
+python_version: '3.13'
+app_file: app.py
+pinned: false
+---
+
 # Blood Test Explainer
 
 Blood test results often arrive as dense PDFs, scans, photos, or lab documents filled with abbreviations, reference ranges, units, and flags. For many people, the result is anxiety rather than understanding: they can see that something is high or low, but they do not know what it means, what questions to ask, or what practical next steps might support better health.
