@@ -8,7 +8,8 @@ from typing import Any
 import gradio as gr
 
 from src.local_env import load_local_env
-from src.openbmb_client import DEFAULT_API_URL, DEFAULT_MODEL, OpenBMBExtractor
+from src.extraction import build_extractor
+from src.openbmb_client import DEFAULT_API_URL, DEFAULT_MODEL
 
 
 load_local_env()
@@ -41,7 +42,9 @@ def extract_lab_values(
             gr.update(visible=True),
         )
 
-    extractor = OpenBMBExtractor(
+    # Backend chosen by EXTRACTOR_BACKEND (auto|local|api). Local = offline MiniCPM-V GGUF;
+    # api = the hosted OpenBMB endpoint (dev fallback). Defaults to auto.
+    extractor = build_extractor(
         api_url=api_url,
         model=model,
         api_key=(api_key_override or "").strip() or None,
