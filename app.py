@@ -7,7 +7,7 @@ from typing import Any
 import gradio as gr
 
 from src.local_env import load_local_env
-from src.openbmb_client import OpenBMBExtractor
+from src.extraction import build_extractor
 
 
 load_local_env()
@@ -23,7 +23,7 @@ def extract_lab_values(
             gr.update(visible=True),
         )
 
-    extractor = OpenBMBExtractor(
+    extractor = build_extractor(
         api_key=(api_key_override or "").strip() or None,
     )
 
