@@ -1,7 +1,7 @@
 """GBNF grammar for the extraction schema.
 
 Grammar-constrained decoding makes the local model **physically unable** to emit anything but
-a valid `{tests:[...], notes:[...]}` object in our exact schema. For a small model this is the
+a valid `{patient:{...}, tests:[...], notes:[...]}` object in our exact schema. For a small model this is the
 single biggest reliability lever: no parse failures, no stray prose, no hallucinated keys.
 Passed to llama.cpp via `LlamaGrammar.from_string(...)`.
 """
@@ -9,7 +9,13 @@ Passed to llama.cpp via `LlamaGrammar.from_string(...)`.
 from __future__ import annotations
 
 EXTRACTION_GRAMMAR = r"""
-root    ::= "{" ws "\"tests\"" ws ":" ws tests ws "," ws "\"notes\"" ws ":" ws notes ws "}"
+root    ::= "{" ws "\"patient\"" ws ":" ws patient ws "," ws "\"tests\"" ws ":" ws tests ws "," ws "\"notes\"" ws ":" ws notes ws "}"
+
+patient ::= "{" ws
+            "\"age\"" ws ":" ws strornull ws "," ws
+            "\"age_years\"" ws ":" ws numberornull ws "," ws
+            "\"sex\"" ws ":" ws sex ws
+            "}"
 
 tests   ::= "[" ws ( test ( ws "," ws test )* )? ws "]"
 test    ::= "{" ws
@@ -25,7 +31,9 @@ test    ::= "{" ws
 notes   ::= "[" ws ( string ( ws "," ws string )* )? ws "]"
 
 status  ::= "\"low\"" | "\"normal\"" | "\"high\"" | "\"abnormal\"" | "\"unknown\""
+sex     ::= "\"male\"" | "\"female\"" | "\"unknown\""
 strornull ::= string | "null"
+numberornull ::= number | "null"
 string  ::= "\"" char* "\""
 char    ::= [^"\\] | "\\" ["\\/bfnrt]
 number  ::= "-"? ("0" | [1-9] [0-9]*) ("." [0-9]+)?
