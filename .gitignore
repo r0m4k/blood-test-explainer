@@ -6,9 +6,10 @@ venv/
 .env
 .env.*
 
-# Generated training/eval data (reproducible from seed; don't commit)
+# Generated synthetic data (reproducible from seed; don't commit). Hand-collected real
+# reports under eval/data/real/ and KB references ARE committed.
 train/data/
-eval/data/
+eval/data/synth*
 runs/
 
 # Model artifacts (bundle the final GGUF via git-lfs deliberately, not by accident)
