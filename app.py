@@ -19,7 +19,6 @@ _API_MODE = os.getenv("EXTRACTOR_BACKEND", "auto").strip().lower() == "api"
 
 def extract_lab_values(
     uploaded_file: str | None,
-    api_key_override: str,
 ) -> tuple[str, str, Any]:
     if not uploaded_file:
         return (
@@ -28,9 +27,7 @@ def extract_lab_values(
             gr.update(visible=True),
         )
 
-    extractor = build_extractor(
-        api_key=(api_key_override or "").strip() or None,
-    )
+    extractor = build_extractor()
 
     try:
         result = extractor.extract(uploaded_file)
@@ -200,6 +197,7 @@ def ideal_document_example_html() -> str:
             "value": "14.2",
             "unit": "g/dL",
             "status": "ideal",
+            "range_position": "76",
             "summary": "Oxygen-carrying protein in red blood cells.",
             "importance": "Helps show whether your blood can transport oxygen efficiently and can point toward anemia or dehydration patterns.",
             "improve": "Maintain iron-rich foods, B12, folate, and steady protein intake. Review heavy fatigue or shortness of breath with a clinician.",
@@ -209,6 +207,7 @@ def ideal_document_example_html() -> str:
             "value": "78",
             "unit": "ng/mL",
             "status": "ideal",
+            "range_position": "72",
             "summary": "Stored iron available for future red blood cell production.",
             "importance": "Low ferritin can appear before hemoglobin drops and may affect energy, hair shedding, endurance, and recovery.",
             "improve": "Pair iron foods with vitamin C, avoid tea or coffee directly around iron-heavy meals, and confirm supplementation needs clinically.",
@@ -218,6 +217,7 @@ def ideal_document_example_html() -> str:
             "value": "68",
             "unit": "mg/dL",
             "status": "ideal",
+            "range_position": "80",
             "summary": "Protective cholesterol involved in reverse cholesterol transport.",
             "importance": "Higher HDL in context can reflect stronger cardiometabolic resilience, especially alongside healthy triglycerides.",
             "improve": "Prioritize aerobic training, olive oil, nuts, fatty fish, fiber, and sleep consistency.",
@@ -227,6 +227,7 @@ def ideal_document_example_html() -> str:
             "value": "34",
             "unit": "ng/mL",
             "status": "normal",
+            "range_position": "53",
             "summary": "Fat-soluble hormone-like vitamin linked to bone, immune, and muscle function.",
             "importance": "A normal value may still be worth optimizing depending on season, symptoms, diet, and sun exposure.",
             "improve": "Use safe sun exposure, vitamin D-rich foods, and discuss dose and recheck timing before supplementing heavily.",
@@ -236,6 +237,7 @@ def ideal_document_example_html() -> str:
             "value": "92",
             "unit": "mg/dL",
             "status": "normal",
+            "range_position": "58",
             "summary": "Blood sugar level after an overnight fast.",
             "importance": "Useful for spotting glucose regulation trends, especially when viewed with HbA1c, insulin, and triglycerides.",
             "improve": "Walk after meals, lift weights, increase fiber, reduce liquid sugar, and keep sleep timing stable.",
@@ -245,13 +247,15 @@ def ideal_document_example_html() -> str:
             "value": "184",
             "unit": "mg/dL",
             "status": "bad",
+            "range_position": "88",
             "summary": "Circulating blood fats strongly affected by diet, alcohol, insulin sensitivity, and recent intake.",
             "importance": "High triglycerides can signal cardiometabolic stress and should be interpreted with HDL, glucose, liver markers, and context.",
             "improve": "Reduce refined carbohydrates and alcohol, add omega-3 rich fish, build regular zone-2 cardio, and recheck fasting values.",
         },
     ]
 
-    cards = "\n".join(_ideal_marker_card(test) for test in tests)
+    left_cards = "\n".join(_ideal_marker_card(test) for index, test in enumerate(tests) if index % 2 == 0)
+    right_cards = "\n".join(_ideal_marker_card(test) for index, test in enumerate(tests) if index % 2 == 1)
 
     return f"""
     <section class="bte-ideal-doc">
@@ -263,31 +267,37 @@ def ideal_document_example_html() -> str:
         </div>
       </header>
 
+      <input class="bte-ideal-filter" type="radio" name="bte-ideal-filter" id="bte-filter-total" checked>
+      <input class="bte-ideal-filter" type="radio" name="bte-ideal-filter" id="bte-filter-ideal">
+      <input class="bte-ideal-filter" type="radio" name="bte-ideal-filter" id="bte-filter-normal">
+      <input class="bte-ideal-filter" type="radio" name="bte-ideal-filter" id="bte-filter-bad">
+
       <div class="bte-ideal-stats">
-        <div class="bte-ideal-stat bte-ideal-stat--total">
+        <label class="bte-ideal-stat bte-ideal-stat--total" for="bte-filter-total">
           <span>6</span>
           <strong>Total tests</strong>
-          <small>Detected and explained</small>
-        </div>
-        <div class="bte-ideal-stat bte-ideal-stat--ideal">
+        </label>
+        <label class="bte-ideal-stat bte-ideal-stat--ideal" for="bte-filter-ideal">
           <span>3</span>
           <strong>Ideal</strong>
-          <small>Green, optimized markers</small>
-        </div>
-        <div class="bte-ideal-stat bte-ideal-stat--normal">
+        </label>
+        <label class="bte-ideal-stat bte-ideal-stat--normal" for="bte-filter-normal">
           <span>2</span>
           <strong>Normal</strong>
-          <small>Blue, within range</small>
-        </div>
-        <div class="bte-ideal-stat bte-ideal-stat--bad">
+        </label>
+        <label class="bte-ideal-stat bte-ideal-stat--bad" for="bte-filter-bad">
           <span>1</span>
           <strong>Bad</strong>
-          <small>Light red, needs attention</small>
-        </div>
+        </label>
       </div>
 
       <div class="bte-ideal-grid">
-        {cards}
+        <div class="bte-ideal-column">
+          {left_cards}
+        </div>
+        <div class="bte-ideal-column">
+          {right_cards}
+        </div>
       </div>
     </section>
     """
@@ -295,14 +305,28 @@ def ideal_document_example_html() -> str:
 
 def _ideal_marker_card(test: dict[str, str]) -> str:
     status = test["status"]
+    range_position_value = test.get("range_position", "50")
+    range_position = escape(range_position_value)
+    range_labels = test.get("range_labels", ("Bad", "Normal", "Good"))
+    low_label, mid_label, high_label = (escape(label) for label in range_labels)
     return f"""
     <article class="bte-ideal-marker bte-ideal-marker--{escape(status)}">
       <div class="bte-ideal-marker-head">
-        <div>
-          <span class="bte-ideal-status">{escape(status.title())}</span>
+        <div class="bte-ideal-title-line">
           <h3>{escape(test["marker"])}</h3>
+          <span class="bte-ideal-status">{escape(status.title())}</span>
         </div>
-        <strong>{escape(test["value"])} <small>{escape(test["unit"])}</small></strong>
+        <div class="bte-range-scale" style="--value-position: {range_position}%; --value-position-number: {range_position}">
+          <div class="bte-range-value">
+            <strong>{escape(test["value"])}</strong>
+            <small>{escape(test["unit"])}</small>
+          </div>
+          <div class="bte-range-track" aria-hidden="true">
+            <span>{low_label}</span>
+            <span>{mid_label}</span>
+            <span>{high_label}</span>
+          </div>
+        </div>
       </div>
       <div class="bte-ideal-marker-body">
         <div>
@@ -677,40 +701,6 @@ gradio-app,
   background: transparent !important;
   border: 0 !important;
   box-shadow: none !important;
-}
-
-.bte-api-key-panel {
-  width: 100%;
-  max-width: 560px;
-  justify-self: end;
-  margin: 0;
-  border: 1px solid rgba(255, 255, 255, 0.58);
-  border-radius: 18px;
-  padding: 12px;
-  background: rgba(255, 255, 255, 0.12);
-  box-shadow: none;
-}
-
-.bte-api-key-panel > div,
-.bte-api-key-panel > div > div {
-  background: transparent !important;
-}
-
-.bte-api-key-panel .block {
-  border: 0 !important;
-  background: transparent !important;
-}
-
-.bte-api-key-panel input {
-  min-height: 44px !important;
-  border-radius: 12px !important;
-}
-
-.bte-title .bte-api-key-panel label,
-.bte-title .bte-api-key-panel .label-wrap,
-.bte-title .bte-api-key-panel .label-wrap span {
-  color: #ffffff !important;
-  -webkit-text-fill-color: #ffffff !important;
 }
 
 .bte-hero-grid {
@@ -1844,13 +1834,10 @@ button.bte-action *,
   max-width: 100% !important;
   margin-left: auto !important;
   margin-right: auto !important;
-  margin-top: 18px;
-  border: 1px solid var(--bte-line);
-  border-radius: var(--bte-radius);
-  padding: 22px;
-  background: var(--bte-surface);
-  box-shadow: var(--bte-shadow);
-  overflow: hidden;
+  margin-top: 34px;
+  display: grid;
+  gap: 16px;
+  background: transparent;
 }
 
 .bte-ideal-hero {
@@ -1858,12 +1845,14 @@ button.bte-action *,
   align-items: center;
   justify-content: space-between;
   gap: 22px;
-  padding: 24px;
-  border-radius: 20px;
+  padding: 28px;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  border-radius: var(--bte-radius);
   color: #ffffff;
   background:
     linear-gradient(120deg, rgba(18, 128, 92, 0.98) 0%, rgba(37, 99, 235, 0.95) 58%, rgba(191, 52, 52, 0.82) 100%),
     #12805c;
+  box-shadow: var(--bte-shadow-strong);
 }
 
 .bte-ideal-hero .bte-kicker,
@@ -1888,19 +1877,32 @@ button.bte-action *,
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
-  margin: 16px 0;
+  margin: 0;
+}
+
+.bte-ideal-filter {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .bte-ideal-stat {
+  --bte-stat-bg: var(--bte-surface);
+  --bte-stat-ring: linear-gradient(120deg, var(--bte-green), var(--bte-blue), var(--bte-red));
   padding: 16px;
-  border: 1px solid var(--bte-line);
+  border: 2px solid var(--bte-line);
   border-radius: 18px;
-  background: var(--bte-surface);
+  background: var(--bte-stat-bg);
+  box-shadow: var(--bte-shadow);
+  overflow: hidden;
+  cursor: pointer;
+  transition: background 220ms ease, box-shadow 220ms ease, border-color 220ms ease, filter 220ms ease;
 }
 
 .bte-ideal-stat span,
-.bte-ideal-stat strong,
-.bte-ideal-stat small {
+.bte-ideal-stat strong {
   display: block;
 }
 
@@ -1911,17 +1913,26 @@ button.bte-action *,
   margin-bottom: 8px;
 }
 
-.bte-ideal-stat small {
-  color: var(--bte-muted);
-}
-
 .bte-ideal-stat--total span {
   color: var(--bte-ink);
 }
 
+.bte-ideal-doc:has(#bte-filter-total:checked) .bte-ideal-stat--total,
+.bte-ideal-doc:has(#bte-filter-ideal:checked) .bte-ideal-stat--ideal,
+.bte-ideal-doc:has(#bte-filter-normal:checked) .bte-ideal-stat--normal,
+.bte-ideal-doc:has(#bte-filter-bad:checked) .bte-ideal-stat--bad {
+  border-color: transparent;
+  background:
+    linear-gradient(var(--bte-stat-bg), var(--bte-stat-bg)) padding-box,
+    var(--bte-stat-ring) border-box;
+  box-shadow: var(--bte-shadow-strong);
+  filter: saturate(1.08);
+}
+
 .bte-ideal-stat--ideal {
+  --bte-stat-bg: var(--bte-green-soft);
+  --bte-stat-ring: linear-gradient(120deg, var(--bte-green), #22c7a0, var(--bte-blue));
   border-color: rgba(18, 128, 92, 0.22);
-  background: var(--bte-green-soft);
 }
 
 .bte-ideal-stat--ideal span {
@@ -1929,8 +1940,9 @@ button.bte-action *,
 }
 
 .bte-ideal-stat--normal {
+  --bte-stat-bg: var(--bte-blue-soft);
+  --bte-stat-ring: linear-gradient(120deg, var(--bte-blue), #52a8ff, var(--bte-green));
   border-color: rgba(37, 99, 235, 0.22);
-  background: var(--bte-blue-soft);
 }
 
 .bte-ideal-stat--normal span {
@@ -1938,8 +1950,9 @@ button.bte-action *,
 }
 
 .bte-ideal-stat--bad {
+  --bte-stat-bg: var(--bte-red-soft);
+  --bte-stat-ring: linear-gradient(120deg, var(--bte-red), #ff8f8f, var(--bte-blue));
   border-color: rgba(191, 52, 52, 0.2);
-  background: var(--bte-red-soft);
 }
 
 .bte-ideal-stat--bad span {
@@ -1949,49 +1962,91 @@ button.bte-action *,
 .bte-ideal-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  align-items: start;
+  gap: 16px;
+}
+
+.bte-ideal-column {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+}
+
+.bte-ideal-doc:has(#bte-filter-ideal:checked) .bte-ideal-marker:not(.bte-ideal-marker--ideal),
+.bte-ideal-doc:has(#bte-filter-normal:checked) .bte-ideal-marker:not(.bte-ideal-marker--normal),
+.bte-ideal-doc:has(#bte-filter-bad:checked) .bte-ideal-marker:not(.bte-ideal-marker--bad) {
+  display: none;
 }
 
 .bte-ideal-marker {
+  --bte-marker-color: var(--bte-green);
+  --bte-marker-soft: var(--bte-green-soft);
   border: 1px solid var(--bte-line);
-  border-radius: 18px;
-  padding: 16px;
+  border-radius: var(--bte-radius);
+  padding: 18px;
   background: var(--bte-surface);
+  box-shadow: var(--bte-shadow);
+  overflow: hidden;
+  transition: transform 700ms ease, box-shadow 700ms ease, border-color 700ms ease;
+}
+
+.bte-ideal-marker:hover,
+.bte-ideal-marker:focus-within {
+  transform: translateY(-2px);
+  box-shadow: var(--bte-shadow-strong);
 }
 
 .bte-ideal-marker--ideal {
+  --bte-marker-color: var(--bte-green);
+  --bte-marker-soft: var(--bte-green-soft);
   border-color: rgba(18, 128, 92, 0.22);
 }
 
 .bte-ideal-marker--normal {
+  --bte-marker-color: var(--bte-blue);
+  --bte-marker-soft: var(--bte-blue-soft);
   border-color: rgba(37, 99, 235, 0.22);
 }
 
 .bte-ideal-marker--bad {
+  --bte-marker-color: var(--bte-red);
+  --bte-marker-soft: var(--bte-red-soft);
   border-color: rgba(191, 52, 52, 0.2);
   background: linear-gradient(180deg, #fff8f8, #ffffff);
 }
 
 .bte-ideal-marker-head {
-  display: flex;
-  justify-content: space-between;
-  gap: 16px;
-  align-items: start;
+  display: grid;
+  grid-template-columns: minmax(180px, 0.8fr) minmax(230px, 1fr);
+  gap: 18px;
+  align-items: center;
+  padding-bottom: 0;
+  border-bottom: 1px solid transparent;
+  transition: padding-bottom 1300ms ease, border-color 1100ms ease;
+}
+
+.bte-ideal-marker:hover .bte-ideal-marker-head,
+.bte-ideal-marker:focus-within .bte-ideal-marker-head {
   padding-bottom: 12px;
-  border-bottom: 1px solid var(--bte-line);
+  border-bottom-color: var(--bte-line);
 }
 
 .bte-ideal-marker-head h3 {
-  margin: 7px 0 0 !important;
+  margin: 0 !important;
   color: var(--bte-ink) !important;
   font-size: 22px !important;
   line-height: 1.1 !important;
 }
 
-.bte-ideal-marker-head strong {
-  color: var(--bte-ink);
-  font-size: 26px;
-  white-space: nowrap;
+.bte-ideal-title-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.bte-ideal-title-line h3 {
+  min-width: 0;
 }
 
 .bte-ideal-marker-head small {
@@ -2023,10 +2078,87 @@ button.bte-action *,
   background: var(--bte-red-soft);
 }
 
+.bte-range-scale {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
+.bte-range-value {
+  position: relative;
+  left: var(--value-position);
+  display: inline-flex;
+  align-items: baseline;
+  justify-self: start;
+  gap: 4px;
+  color: var(--bte-marker-color);
+  transform: translateX(-50%);
+  white-space: nowrap;
+}
+
+.bte-range-value strong {
+  color: inherit;
+  font-size: 19px;
+  line-height: 1;
+}
+
+.bte-range-value small {
+  color: var(--bte-muted);
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.bte-range-track {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  min-height: 32px;
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  border-radius: 999px;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.bte-range-track::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--value-position);
+  border-radius: inherit;
+  background:
+    linear-gradient(90deg, rgba(191, 52, 52, 0.86) 0%, rgba(37, 99, 235, 0.84) 52%, rgba(18, 128, 92, 0.86) 100%);
+  background-size: calc(10000% / var(--value-position-number, 100)) 100%;
+  box-shadow: inset 0 0 18px rgba(255, 255, 255, 0.2);
+}
+
+.bte-range-track span {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  place-items: center;
+  color: var(--bte-ink);
+  font-size: 10px;
+  font-weight: 820;
+  text-transform: uppercase;
+}
+
 .bte-ideal-marker-body {
   display: grid;
   gap: 12px;
+  max-height: 0;
+  overflow: hidden;
+  padding-top: 0;
+  opacity: 0;
+  transform: translateY(-6px);
+  transition: max-height 2200ms cubic-bezier(0.22, 1, 0.36, 1), padding-top 1700ms ease, opacity 1400ms ease, transform 1700ms ease;
+}
+
+.bte-ideal-marker:hover .bte-ideal-marker-body,
+.bte-ideal-marker:focus-within .bte-ideal-marker-body {
+  max-height: 520px;
   padding-top: 14px;
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .bte-ideal-marker-body div {
@@ -2101,8 +2233,8 @@ button.bte-action *,
   .bte-title > *,
   .bte-title *,
   .bte-hero-grid > *,
-  .bte-api-key-panel,
-  .bte-api-key-panel * {
+  .bte-title-copy,
+  .bte-title-copy * {
     min-width: 0 !important;
     max-width: 100% !important;
     overflow-wrap: anywhere;
@@ -2156,12 +2288,6 @@ button.bte-action *,
   .bte-workflow-panel--upload,
   .bte-workflow-panel--analysis {
     min-width: 0 !important;
-  }
-
-  .bte-api-key-panel {
-    margin: 0;
-    max-width: 100%;
-    justify-self: stretch;
   }
 
   .bte-step-heading {
@@ -2313,7 +2439,7 @@ with gr.Blocks(title="Blood Test Explainer") as demo:
         "border:0 !important;box-shadow:none !important;padding:0 !important;}</style>"
     )
     with gr.Row(equal_height=True, elem_classes=["bte-title"]):
-        with gr.Column(scale=6, min_width=420, elem_classes=["bte-title-copy"]):
+        with gr.Column(scale=1, min_width=420, elem_classes=["bte-title-copy"]):
             gr.HTML(
                 """
                 <div>
@@ -2323,14 +2449,6 @@ with gr.Blocks(title="Blood Test Explainer") as demo:
                 </div>
                 """
             )
-        with gr.Column(scale=4, min_width=360, visible=_API_MODE):
-            with gr.Group(elem_classes=["bte-api-key-panel"]):
-                api_key_override = gr.Textbox(
-                    label="OpenBMB API key",
-                    type="password",
-                    placeholder="Paste your OpenBMB API key",
-                    interactive=True,
-                )
 
     gr.HTML(
         """
@@ -2399,7 +2517,7 @@ with gr.Blocks(title="Blood Test Explainer") as demo:
         show_progress="hidden",
     ).then(
         extract_lab_values,
-        inputs=[uploaded, api_key_override],
+        inputs=[uploaded],
         outputs=[status, report, report_panel],
         scroll_to_output=True,
         show_progress="hidden",
