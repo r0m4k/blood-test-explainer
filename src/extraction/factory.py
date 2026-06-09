@@ -1,11 +1,12 @@
 """Backend selection.
 
 `EXTRACTOR_BACKEND` env:
-  - `auto` (default): local if a GGUF is configured + importable, otherwise the API backend.
-    This keeps the app working today (API) and flips to fully-offline the moment the fine-tuned
-    GGUF is bundled — no code change.
-  - `local`: force the offline MiniCPM-V backend (errors if not configured).
-  - `api`:   force the hosted OpenBMB endpoint (dev fallback only).
+  - `auto` (default): local-server if LLAMA_SERVER_URL is set; else the in-process llama.cpp
+    backend if a GGUF + llama-cpp-python are available; else the hosted API.
+  - `local` / `server`: the offline **llama-server** backend (the path that works for MiniCPM-V
+    4.6). Run `llama-server -m model.gguf --mmproj mmproj.gguf --port 8080` alongside the app.
+  - `llamacpp`: in-process llama-cpp-python (only once it supports the model build).
+  - `api`: the hosted OpenBMB endpoint (dev fallback only).
 """
 
 from __future__ import annotations
@@ -14,6 +15,7 @@ import os
 
 from src.extraction.base import Extractor
 from src.extraction.local_minicpmv import LocalMiniCPMVExtractor
+from src.extraction.local_server import LocalServerExtractor
 from src.openbmb_client import OpenBMBExtractor
 
 
@@ -26,20 +28,23 @@ def build_extractor(
 
     if backend == "api":
         return OpenBMBExtractor(api_url=api_url, model=model, api_key=api_key)
-
-    if backend == "local":
+    if backend in ("local", "server", "local-server"):
+        return LocalServerExtractor()
+    if backend == "llamacpp":
         return LocalMiniCPMVExtractor()
 
     # auto
-    if _local_available():
+    if os.getenv("LLAMA_SERVER_URL"):
+        return LocalServerExtractor()
+    if _llamacpp_available():
         try:
             return LocalMiniCPMVExtractor()
         except Exception:
-            pass  # fall through to API
+            pass
     return OpenBMBExtractor(api_url=api_url, model=model, api_key=api_key)
 
 
-def _local_available() -> bool:
+def _llamacpp_available() -> bool:
     if not (os.getenv("LOCAL_MODEL_PATH") and os.getenv("LOCAL_MMPROJ_PATH")):
         return False
     try:
