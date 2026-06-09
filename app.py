@@ -634,6 +634,7 @@ gradio-app,
 
 .bte-title p {
   color: rgba(255, 255, 255, 0.88);
+  -webkit-text-fill-color: rgba(255, 255, 255, 0.88) !important;
   font-size: 16px;
   max-width: 820px;
   margin: 0;
@@ -644,8 +645,18 @@ gradio-app,
 }
 
 .bte-title .bte-kicker,
-.bte-title h1 {
+.bte-title .bte-kicker *,
+.bte-title h1,
+.bte-title h1 *,
+.bte-title .bte-title-copy p,
+.bte-title .bte-title-copy p * {
   color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+.bte-title .bte-title-copy > div > p:not(.bte-kicker) {
+  color: rgba(255, 255, 255, 0.88) !important;
+  -webkit-text-fill-color: rgba(255, 255, 255, 0.88) !important;
 }
 
 .bte-title h1 {
@@ -890,10 +901,17 @@ gradio-app,
   display: grid;
   place-items: center;
   border-radius: 50%;
-  color: #ffffff;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
   background: linear-gradient(135deg, var(--bte-green), var(--bte-blue));
   font-size: 15px;
   font-weight: 780;
+}
+
+.bte-step-heading span,
+.bte-step-heading span * {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
 }
 
 .bte-step-heading h2 {
