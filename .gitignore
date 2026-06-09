@@ -1,0 +1,25 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.env
+.env.*
+
+# Generated training/eval data (reproducible from seed; don't commit)
+train/data/
+eval/data/
+runs/
+
+# Model artifacts (bundle the final GGUF via git-lfs deliberately, not by accident)
+*.safetensors
+*.bin
+adapters/
+# NOTE: the shipped GGUF + mmproj are tracked via .gitattributes (git-lfs), not ignored.
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+.gradio/
+flagged/
