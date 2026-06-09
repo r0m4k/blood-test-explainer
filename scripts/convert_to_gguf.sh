@@ -1,37 +1,35 @@
 #!/usr/bin/env bash
-# Convert the merged, fine-tuned MiniCPM-V into a quantized GGUF + vision projector (mmproj)
-# for llama.cpp, then quantize to Q4_K_M. Produces the two files the offline backend loads:
+# Convert the merged, fine-tuned MiniCPM-V LLM into a quantized GGUF for llama.cpp, and
+# download the official MiniCPM-V 4.6 mmproj. Produces the two files the offline backend loads:
 #   models/minicpmv-lab.Q4_K_M.gguf   (LOCAL_MODEL_PATH)
 #   models/minicpmv-lab.mmproj.gguf   (LOCAL_MMPROJ_PATH)
 #
-# Prereqs: a merged HF model (scripts/merge_lora.py) and a local llama.cpp checkout.
+# LoRA touches the LLM, not the vision encoder, so the official mmproj remains valid.
 #
-# ⚠️ MiniCPM-V GGUF conversion lives under llama.cpp's multimodal tooling and the exact script
-# names/paths move between releases (older: examples/llava/*, newer: tools/mtmd/*). Check your
-# llama.cpp version and adjust the three SCRIPT paths below. The flow is stable; the paths drift.
+# Prereqs: a merged HF model (scripts/merge_lora.py), a local llama.cpp checkout, and
+# huggingface-cli (`pip install huggingface_hub`).
 set -euo pipefail
 
 MERGED="${1:-./merged-minicpmv-lab}"          # merged HF model dir
 LLAMA="${LLAMA_CPP:-./llama.cpp}"             # path to a llama.cpp checkout
 OUT="${OUT_DIR:-./models}"
-VER="${MINICPMV_VERSION:-3}"                  # MiniCPM-V arch version flag; confirm for 4.6
 mkdir -p "$OUT"
 
-echo "==> 1/4  Split vision encoder + LLM (surgery)"
-python "$LLAMA/examples/llava/minicpmv-surgery.py" -m "$MERGED"
+echo "==> 1/3  Download official MiniCPM-V 4.6 GGUF assets (includes mmproj)"
+huggingface-cli download openbmb/MiniCPM-V-4.6-gguf --local-dir "$OUT"
+MMPROJ="$(find "$OUT" -maxdepth 1 -type f -iname '*mmproj*.gguf' | head -n 1)"
+if [[ -z "${MMPROJ:-}" ]]; then
+  echo "No mmproj GGUF found in $OUT after download" >&2
+  exit 1
+fi
+if [[ "$MMPROJ" != "$OUT/minicpmv-lab.mmproj.gguf" ]]; then
+  cp "$MMPROJ" "$OUT/minicpmv-lab.mmproj.gguf"
+fi
 
-echo "==> 2/4  Build the vision projector (mmproj) GGUF"
-python "$LLAMA/examples/llava/minicpmv-convert-image-encoder-to-gguf.py" \
-  -m "$MERGED" \
-  --minicpmv-projector "$MERGED/minicpmv.projector" \
-  --output-dir "$OUT" \
-  --minicpmv_version "$VER"
-mv "$OUT"/*mmproj*.gguf "$OUT/minicpmv-lab.mmproj.gguf" 2>/dev/null || true
+echo "==> 2/3  Convert the merged LLM to GGUF (f16)"
+python "$LLAMA/convert_hf_to_gguf.py" "$MERGED" --outfile "$OUT/minicpmv-lab.f16.gguf"
 
-echo "==> 3/4  Convert the LLM to GGUF (f16)"
-python "$LLAMA/convert_hf_to_gguf.py" "$MERGED/model" --outfile "$OUT/minicpmv-lab.f16.gguf"
-
-echo "==> 4/4  Quantize to Q4_K_M"
+echo "==> 3/3  Quantize to Q4_K_M"
 "$LLAMA/llama-quantize" "$OUT/minicpmv-lab.f16.gguf" "$OUT/minicpmv-lab.Q4_K_M.gguf" Q4_K_M
 
 echo
