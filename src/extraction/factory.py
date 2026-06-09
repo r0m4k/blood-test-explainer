@@ -52,3 +52,7 @@ def _llamacpp_available() -> bool:
     except ImportError:
         return False
     return True
+
+
+def _in_process_local_configured() -> bool:
+    return bool(os.getenv("LOCAL_MODEL_PATH") and os.getenv("LOCAL_MMPROJ_PATH"))
