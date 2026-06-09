@@ -12,6 +12,11 @@ from src.extraction import build_extractor
 
 load_local_env()
 
+# The hosted-API key field is only relevant when the API backend is active; in offline
+# (local) modes it's dead weight, so we only show it when EXTRACTOR_BACKEND == "api".
+_API_MODE = os.getenv("EXTRACTOR_BACKEND", "auto").strip().lower() == "api"
+
+
 def extract_lab_values(
     uploaded_file: str | None,
     api_key_override: str,
@@ -2302,6 +2307,11 @@ button.bte-action *,
 
 
 with gr.Blocks(title="Blood Test Explainer") as demo:
+    # Flatten the report container so only the inner .bte-report card shows (no double box).
+    gr.HTML(
+        "<style>.bte-report-panel,.bte-report-panel>*{background:transparent !important;"
+        "border:0 !important;box-shadow:none !important;padding:0 !important;}</style>"
+    )
     with gr.Row(equal_height=True, elem_classes=["bte-title"]):
         with gr.Column(scale=6, min_width=420, elem_classes=["bte-title-copy"]):
             gr.HTML(
@@ -2313,7 +2323,7 @@ with gr.Blocks(title="Blood Test Explainer") as demo:
                 </div>
                 """
             )
-        with gr.Column(scale=4, min_width=360):
+        with gr.Column(scale=4, min_width=360, visible=_API_MODE):
             with gr.Group(elem_classes=["bte-api-key-panel"]):
                 api_key_override = gr.Textbox(
                     label="OpenBMB API key",
@@ -2379,7 +2389,7 @@ with gr.Blocks(title="Blood Test Explainer") as demo:
         show_progress="hidden",
     )
 
-    with gr.Group(visible=False) as report_panel:
+    with gr.Group(visible=False, elem_classes=["bte-report-panel"]) as report_panel:
         report = gr.HTML(empty_report_html())
 
     run_button.click(
