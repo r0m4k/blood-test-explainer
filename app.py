@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 from html import escape
 from typing import Any
@@ -9,89 +8,42 @@ import gradio as gr
 
 from src.local_env import load_local_env
 from src.extraction import build_extractor
-from src.openbmb_client import DEFAULT_API_URL, DEFAULT_MODEL
 
 
 load_local_env()
 
-TABLE_HEADERS = [
-    "marker",
-    "value",
-    "unit",
-    "reference_range",
-    "status",
-    "confidence",
-    "source_text",
-]
-
-
 def extract_lab_values(
     uploaded_file: str | None,
-    api_url: str,
-    model: str,
     api_key_override: str,
-    max_pages: int,
-) -> tuple[list[list[Any]], str, str, str, str, Any]:
+) -> tuple[str, str, Any]:
     if not uploaded_file:
         return (
-            [],
             _status_html("Waiting for a document", "Upload a lab report to begin extraction."),
-            "{}",
-            "",
             empty_report_html("No document uploaded", "Choose a file first, then run extraction again."),
             gr.update(visible=True),
         )
 
-    # Backend chosen by EXTRACTOR_BACKEND (auto|local|api). Local = offline MiniCPM-V GGUF;
-    # api = the hosted OpenBMB endpoint (dev fallback). Defaults to auto.
     extractor = build_extractor(
-        api_url=api_url,
-        model=model,
         api_key=(api_key_override or "").strip() or None,
     )
 
     try:
-        result = extractor.extract(uploaded_file, max_pages=int(max_pages))
+        result = extractor.extract(uploaded_file)
     except Exception as error:
         return (
-            [],
             _status_html("Extraction failed", str(error), tone="danger"),
-            "{}",
-            "",
             empty_report_html("Extraction failed", "The model response could not be converted into a report."),
             gr.update(visible=True),
         )
-
-    table_rows = [[test.get(header) for header in TABLE_HEADERS] for test in result.tests]
-    structured_json = json.dumps(
-        {"tests": result.tests, "notes": result.notes, "request": result.request_summary},
-        indent=2,
-        ensure_ascii=False,
-    )
 
     status_text = f"Extracted {len(result.tests)} lab values."
     if result.notes:
         status_text += " Notes: " + " ".join(result.notes[:3])
 
     return (
-        table_rows,
         _status_html("Extraction complete", status_text),
-        structured_json,
-        result.raw_response,
         report_html(result.tests, result.notes),
         gr.update(visible=True),
-    )
-
-
-def api_status() -> str:
-    configured = bool(os.getenv("OPENBMB_API_KEY"))
-    api_url = os.getenv("OPENBMB_API_URL") or DEFAULT_API_URL
-    model = os.getenv("OPENBMB_MODEL") or DEFAULT_MODEL
-
-    if configured:
-        return f"<strong>OpenBMB key detected.</strong><span>{escape(model)} · {escape(api_url)}</span>"
-    return (
-        "<strong>OpenBMB key missing.</strong><span>Set <code>OPENBMB_API_KEY</code> locally or as a Space secret.</span>"
     )
 
 
@@ -179,10 +131,10 @@ def loading_report_html() -> str:
     """
 
 
-def formation_animation_html() -> str:
+def analysis_animation_html() -> str:
     return """
-    <section class="bte-formation" aria-label="Responsive document formation animation">
-      <div class="bte-formation-stage">
+    <section class="bte-formation bte-formation--analysis" aria-label="Document analysis animation">
+      <div class="bte-formation-stage bte-formation-stage--analysis">
         <div class="bte-source-doc">
           <div class="bte-doc-top">
             <span></span>
@@ -199,13 +151,15 @@ def formation_animation_html() -> str:
           </div>
           <div class="bte-scan-band"></div>
         </div>
+      </div>
+    </section>
+    """
 
-        <div class="bte-flow">
-          <span></span>
-          <i></i>
-          <b></b>
-        </div>
 
+def result_preview_html() -> str:
+    return """
+    <section class="bte-formation bte-formation--result" aria-label="Clear lab results preview">
+      <div class="bte-formation-stage bte-formation-stage--result">
         <div class="bte-smart-report">
           <div class="bte-report-window">
             <div class="bte-report-header">
@@ -231,6 +185,135 @@ def formation_animation_html() -> str:
         </div>
       </div>
     </section>
+    """
+
+
+def ideal_document_example_html() -> str:
+    tests = [
+        {
+            "marker": "Hemoglobin",
+            "value": "14.2",
+            "unit": "g/dL",
+            "status": "ideal",
+            "summary": "Oxygen-carrying protein in red blood cells.",
+            "importance": "Helps show whether your blood can transport oxygen efficiently and can point toward anemia or dehydration patterns.",
+            "improve": "Maintain iron-rich foods, B12, folate, and steady protein intake. Review heavy fatigue or shortness of breath with a clinician.",
+        },
+        {
+            "marker": "Ferritin",
+            "value": "78",
+            "unit": "ng/mL",
+            "status": "ideal",
+            "summary": "Stored iron available for future red blood cell production.",
+            "importance": "Low ferritin can appear before hemoglobin drops and may affect energy, hair shedding, endurance, and recovery.",
+            "improve": "Pair iron foods with vitamin C, avoid tea or coffee directly around iron-heavy meals, and confirm supplementation needs clinically.",
+        },
+        {
+            "marker": "HDL Cholesterol",
+            "value": "68",
+            "unit": "mg/dL",
+            "status": "ideal",
+            "summary": "Protective cholesterol involved in reverse cholesterol transport.",
+            "importance": "Higher HDL in context can reflect stronger cardiometabolic resilience, especially alongside healthy triglycerides.",
+            "improve": "Prioritize aerobic training, olive oil, nuts, fatty fish, fiber, and sleep consistency.",
+        },
+        {
+            "marker": "Vitamin D",
+            "value": "34",
+            "unit": "ng/mL",
+            "status": "normal",
+            "summary": "Fat-soluble hormone-like vitamin linked to bone, immune, and muscle function.",
+            "importance": "A normal value may still be worth optimizing depending on season, symptoms, diet, and sun exposure.",
+            "improve": "Use safe sun exposure, vitamin D-rich foods, and discuss dose and recheck timing before supplementing heavily.",
+        },
+        {
+            "marker": "Fasting Glucose",
+            "value": "92",
+            "unit": "mg/dL",
+            "status": "normal",
+            "summary": "Blood sugar level after an overnight fast.",
+            "importance": "Useful for spotting glucose regulation trends, especially when viewed with HbA1c, insulin, and triglycerides.",
+            "improve": "Walk after meals, lift weights, increase fiber, reduce liquid sugar, and keep sleep timing stable.",
+        },
+        {
+            "marker": "Triglycerides",
+            "value": "184",
+            "unit": "mg/dL",
+            "status": "bad",
+            "summary": "Circulating blood fats strongly affected by diet, alcohol, insulin sensitivity, and recent intake.",
+            "importance": "High triglycerides can signal cardiometabolic stress and should be interpreted with HDL, glucose, liver markers, and context.",
+            "improve": "Reduce refined carbohydrates and alcohol, add omega-3 rich fish, build regular zone-2 cardio, and recheck fasting values.",
+        },
+    ]
+
+    cards = "\n".join(_ideal_marker_card(test) for test in tests)
+
+    return f"""
+    <section class="bte-ideal-doc">
+      <header class="bte-ideal-hero">
+        <div>
+          <p class="bte-kicker">Ideal document example</p>
+          <h2>Final health report reference</h2>
+          <p>This static example shows the kind of rich, explanatory document the agent should eventually generate from a raw lab upload.</p>
+        </div>
+      </header>
+
+      <div class="bte-ideal-stats">
+        <div class="bte-ideal-stat bte-ideal-stat--total">
+          <span>6</span>
+          <strong>Total tests</strong>
+          <small>Detected and explained</small>
+        </div>
+        <div class="bte-ideal-stat bte-ideal-stat--ideal">
+          <span>3</span>
+          <strong>Ideal</strong>
+          <small>Green, optimized markers</small>
+        </div>
+        <div class="bte-ideal-stat bte-ideal-stat--normal">
+          <span>2</span>
+          <strong>Normal</strong>
+          <small>Blue, within range</small>
+        </div>
+        <div class="bte-ideal-stat bte-ideal-stat--bad">
+          <span>1</span>
+          <strong>Bad</strong>
+          <small>Light red, needs attention</small>
+        </div>
+      </div>
+
+      <div class="bte-ideal-grid">
+        {cards}
+      </div>
+    </section>
+    """
+
+
+def _ideal_marker_card(test: dict[str, str]) -> str:
+    status = test["status"]
+    return f"""
+    <article class="bte-ideal-marker bte-ideal-marker--{escape(status)}">
+      <div class="bte-ideal-marker-head">
+        <div>
+          <span class="bte-ideal-status">{escape(status.title())}</span>
+          <h3>{escape(test["marker"])}</h3>
+        </div>
+        <strong>{escape(test["value"])} <small>{escape(test["unit"])}</small></strong>
+      </div>
+      <div class="bte-ideal-marker-body">
+        <div>
+          <span>Measures</span>
+          <p>{escape(test["summary"])}</p>
+        </div>
+        <div>
+          <span>Why it matters</span>
+          <p>{escape(test["importance"])}</p>
+        </div>
+        <div>
+          <span>How to improve</span>
+          <p>{escape(test["improve"])}</p>
+        </div>
+      </div>
+    </article>
     """
 
 
@@ -381,8 +464,14 @@ CUSTOM_CSS = """
   --bte-red-soft: #fff1f1;
   --bte-amber: #9a6700;
   --bte-amber-soft: #fff7df;
-  --bte-paper: #f7f9fc;
-  --bte-card: rgba(255, 255, 255, 0.92);
+  --bte-page: rgb(248, 249, 252);
+  --bte-paper: rgb(248, 249, 252);
+  --bte-surface: #ffffff;
+  --bte-card: #ffffff;
+  --bte-radius: 22px;
+  --bte-shadow: 0 14px 34px rgba(17, 24, 39, 0.055);
+  --bte-shadow-strong: 0 18px 44px rgba(17, 24, 39, 0.07);
+  --bte-rail: min(94vw, 1240px);
 }
 
 *,
@@ -397,10 +486,10 @@ gradio-app,
 .dark,
 .dark .gradio-container {
   color-scheme: light !important;
-  --body-background-fill: #f7f9fc !important;
+  --body-background-fill: rgb(248, 249, 252) !important;
   --body-text-color: #111827 !important;
   --background-fill-primary: #ffffff !important;
-  --background-fill-secondary: #f7f9fc !important;
+  --background-fill-secondary: rgb(248, 249, 252) !important;
   --block-background-fill: #ffffff !important;
   --block-border-color: #e5eaf0 !important;
   --block-border-width: 1px !important;
@@ -418,19 +507,18 @@ gradio-app,
   --button-primary-background-fill-hover: #263244 !important;
   --button-primary-text-color: #ffffff !important;
   --slider-color: #2563eb !important;
-  --shadow-drop: 0 18px 48px rgba(17, 24, 39, 0.06) !important;
+  --shadow-drop: var(--bte-shadow) !important;
+  background: var(--bte-page) !important;
 }
 
 .gradio-container {
-  max-width: 1240px !important;
+  max-width: none !important;
   width: 100% !important;
   margin: 0 auto !important;
   box-sizing: border-box !important;
   color: var(--bte-ink);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif !important;
-  background:
-    radial-gradient(circle at 20% 0%, rgba(37, 99, 235, 0.08), transparent 34%),
-    linear-gradient(180deg, #fbfdff 0%, #f4f7fb 100%);
+  background: var(--bte-page) !important;
 }
 
 .gradio-container,
@@ -486,11 +574,13 @@ gradio-app,
 }
 
 .bte-shell {
+  width: 100% !important;
+  max-width: 100% !important;
   border: 1px solid var(--bte-line);
-  border-radius: 22px;
+  border-radius: var(--bte-radius);
   padding: 18px;
   background: var(--bte-card);
-  box-shadow: 0 18px 48px rgba(17, 24, 39, 0.06);
+  box-shadow: var(--bte-shadow);
 }
 
 .bte-engine {
@@ -517,7 +607,20 @@ gradio-app,
 }
 
 .bte-title {
-  padding: 26px 12px 18px;
+  width: var(--bte-rail) !important;
+  max-width: var(--bte-rail) !important;
+  margin: 0 auto 18px !important;
+  padding: 30px 28px 28px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 0.46fr);
+  gap: 32px;
+  align-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.42);
+  border-radius: var(--bte-radius);
+  background:
+    linear-gradient(120deg, rgba(18, 128, 92, 0.98) 0%, rgba(37, 99, 235, 0.95) 58%, rgba(191, 52, 52, 0.82) 100%),
+    #12805c;
+  box-shadow: var(--bte-shadow-strong);
 }
 
 .bte-title h1,
@@ -530,43 +633,337 @@ gradio-app,
 }
 
 .bte-title p {
-  color: var(--bte-muted);
+  color: rgba(255, 255, 255, 0.88);
+  -webkit-text-fill-color: rgba(255, 255, 255, 0.88) !important;
   font-size: 16px;
   max-width: 820px;
   margin: 0;
 }
 
+.bte-title-copy {
+  min-width: 0;
+}
+
+.bte-title .bte-kicker,
+.bte-title .bte-kicker *,
+.bte-title h1,
+.bte-title h1 *,
+.bte-title .bte-title-copy p,
+.bte-title .bte-title-copy p * {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+.bte-title .bte-title-copy > div > p:not(.bte-kicker) {
+  color: rgba(255, 255, 255, 0.88) !important;
+  -webkit-text-fill-color: rgba(255, 255, 255, 0.88) !important;
+}
+
+.bte-title h1 {
+  font-size: clamp(38px, 5vw, 56px) !important;
+  line-height: 1.04 !important;
+}
+
+.bte-title > div,
+.bte-title > div > div,
+.bte-title .column,
+.bte-title .block,
+.bte-title .form {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.bte-api-key-panel {
+  width: 100%;
+  max-width: 560px;
+  justify-self: end;
+  margin: 0;
+  border: 1px solid rgba(255, 255, 255, 0.58);
+  border-radius: 18px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.12);
+  box-shadow: none;
+}
+
+.bte-api-key-panel > div,
+.bte-api-key-panel > div > div {
+  background: transparent !important;
+}
+
+.bte-api-key-panel .block {
+  border: 0 !important;
+  background: transparent !important;
+}
+
+.bte-api-key-panel input {
+  min-height: 44px !important;
+  border-radius: 12px !important;
+}
+
+.bte-title .bte-api-key-panel label,
+.bte-title .bte-api-key-panel .label-wrap,
+.bte-title .bte-api-key-panel .label-wrap span {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
 .bte-hero-grid {
+  width: var(--bte-rail) !important;
+  max-width: var(--bte-rail) !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   align-items: stretch !important;
+  gap: 16px !important;
+}
+
+.bte-hero-grid > div,
+.bte-hero-grid .column {
+  min-width: 0 !important;
+  height: 100% !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.bte-hero-grid > div > div,
+.bte-hero-grid .column > div {
+  height: 100% !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+.bte-hero-grid .block,
+.bte-hero-grid .form,
+.bte-hero-grid .html-container {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+
+.bte-hero-grid .bte-upload-card {
+  border: 1px solid var(--bte-line) !important;
+  border-radius: var(--bte-radius) !important;
+  padding: 18px !important;
+  background: var(--bte-card) !important;
+  box-shadow: var(--bte-shadow) !important;
+  overflow: hidden !important;
+}
+
+.bte-hero-grid .block:has(.bte-upload-card),
+.bte-hero-grid div:has(> .bte-upload-card) {
+  height: 430px !important;
+  min-height: 430px !important;
+  border: 1px solid var(--bte-line) !important;
+  border-radius: var(--bte-radius) !important;
+  padding: 18px !important;
+  background: var(--bte-card) !important;
+  box-shadow: var(--bte-shadow) !important;
+  overflow: hidden !important;
+}
+
+.bte-hero-grid .block:has(.bte-upload-card) .bte-upload-card,
+.bte-hero-grid div:has(> .bte-upload-card) > .bte-upload-card {
+  height: 100% !important;
+  min-height: 0 !important;
+  border: 0 !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+}
+
+.bte-workflow-panel {
+  min-width: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.bte-workflow-panel--upload {
+  flex: 0.9 1 0 !important;
+  min-width: 320px !important;
+}
+
+.bte-workflow-panel--analysis {
+  flex: 1.1 1 0 !important;
+  min-width: 360px !important;
+}
+
+.bte-workflow-panel > div,
+.bte-workflow-panel > div > div {
+  background: transparent !important;
+}
+
+.bte-step-row-block,
+.bte-step-row-block > div {
+  width: var(--bte-rail) !important;
+  max-width: var(--bte-rail) !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.bte-step-row-block .prose,
+.bte-step-row-block .html-container,
+.bte-step-row-block .block {
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.bte-status-row,
+.bte-status-row > div,
+.bte-ideal-row,
+.bte-ideal-row > div {
+  width: var(--bte-rail) !important;
+  max-width: var(--bte-rail) !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.bte-status-row .prose,
+.bte-status-row .html-container,
+.bte-status-row .block,
+.bte-ideal-row .prose,
+.bte-ideal-row .html-container,
+.bte-ideal-row .block {
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.bte-status-row .bte-run-status {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 4px !important;
+  border: 1px solid rgba(18, 128, 92, 0.22) !important;
+  border-radius: 14px !important;
+  padding: 12px 14px !important;
+  background: var(--bte-green-soft) !important;
+  box-shadow: var(--bte-shadow) !important;
+}
+
+.bte-step-row {
+  width: 100% !important;
+  max-width: 100% !important;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  align-items: stretch;
+  gap: 16px;
+  margin: 0 0 16px;
+}
+
+.bte-step-block,
+.bte-step-block > div {
+  height: auto !important;
+  min-height: 0 !important;
+  flex: 0 0 auto !important;
+  overflow: visible !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.bte-step-heading {
+  min-height: 112px;
+  height: 100%;
+  display: flex;
+  align-items: start;
+  gap: 12px;
+  margin: 0;
+  padding: 18px;
+  border: 1px solid var(--bte-line);
+  border-radius: var(--bte-radius);
+  background: var(--bte-surface);
+  box-shadow: var(--bte-shadow);
+  overflow: hidden;
+}
+
+.bte-step-heading span {
+  width: 34px;
+  min-width: 34px;
+  aspect-ratio: 1;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  background: linear-gradient(135deg, var(--bte-green), var(--bte-blue));
+  font-size: 15px;
+  font-weight: 780;
+}
+
+.bte-step-heading span,
+.bte-step-heading span * {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+}
+
+.bte-step-heading h2 {
+  margin: 0 !important;
+  color: var(--bte-ink) !important;
+  font-size: clamp(18px, 2.1vw, 24px) !important;
+  line-height: 1.18 !important;
+  letter-spacing: 0 !important;
+  text-align: left !important;
+}
+
+.bte-step-heading--report {
+  margin-top: 8px;
+  min-height: auto;
+  padding: 0;
 }
 
 .bte-upload-card {
-  height: 100%;
+  height: 430px !important;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
+  min-height: 430px;
 }
 
 .bte-formation {
-  height: 100%;
-  min-height: 390px;
+  width: 100% !important;
+  max-width: 100% !important;
+  height: 430px !important;
+  min-height: 430px;
   border: 1px solid var(--bte-line);
-  border-radius: 24px;
+  border-radius: var(--bte-radius);
   padding: 22px;
-  background:
-    linear-gradient(135deg, rgba(255, 255, 255, 0.96), rgba(247, 251, 255, 0.86)),
-    #ffffff;
-  box-shadow: 0 22px 70px rgba(17, 24, 39, 0.08);
+  background: var(--bte-surface);
+  box-shadow: var(--bte-shadow);
   overflow: hidden;
 }
 
 .bte-formation-stage {
   height: 100%;
-  min-height: 342px;
+  min-height: 382px;
   display: grid;
-  grid-template-columns: minmax(138px, 0.95fr) 74px minmax(176px, 1.12fr);
+  grid-template-columns: minmax(0, 1fr);
+  justify-items: center;
   align-items: center;
   gap: 14px;
+}
+
+.bte-formation-stage--analysis .bte-source-doc,
+.bte-formation-stage--result .bte-smart-report,
+.bte-formation-stage--result .bte-report-window {
+  width: 100%;
 }
 
 .bte-source-doc,
@@ -574,8 +971,8 @@ gradio-app,
   position: relative;
   border: 1px solid rgba(216, 226, 238, 0.95);
   border-radius: 18px;
-  background: #ffffff;
-  box-shadow: 0 20px 48px rgba(17, 24, 39, 0.1);
+  background: var(--bte-surface);
+  box-shadow: 0 14px 34px rgba(17, 24, 39, 0.075);
 }
 
 .bte-source-doc {
@@ -671,7 +1068,7 @@ gradio-app,
   aspect-ratio: 1;
   border-radius: 12px;
   border: 1px solid #dbeafe;
-  background: #ffffff;
+  background: var(--bte-surface);
   box-shadow: 0 12px 28px rgba(37, 99, 235, 0.12);
   animation: bte-flow-tile 2.4s ease-in-out infinite;
 }
@@ -717,7 +1114,7 @@ gradio-app,
   padding: 12px;
   margin-bottom: 10px;
   border: 1px solid var(--bte-line);
-  background: #fbfdff;
+  background: var(--bte-surface);
   animation: bte-card-pop 4.4s ease-in-out infinite;
 }
 
@@ -750,7 +1147,7 @@ gradio-app,
   padding: 14px;
   border: 1px solid var(--bte-line);
   border-radius: 16px;
-  background: #ffffff;
+  background: var(--bte-surface);
 }
 
 .bte-mini-chart span {
@@ -777,15 +1174,20 @@ gradio-app,
 
 .bte-status,
 .bte-run-status {
+  width: 100% !important;
+  max-width: 100% !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
   display: flex;
   flex-direction: column;
   gap: 4px;
   border: 1px solid var(--bte-line);
   border-radius: 14px;
   padding: 12px 14px;
-  background: #ffffff;
+  background: var(--bte-surface);
   color: var(--bte-muted);
   font-size: 13px;
+  box-shadow: var(--bte-shadow);
 }
 
 .bte-status span,
@@ -842,6 +1244,28 @@ button.primary::after {
   border: 0 !important;
 }
 
+.bte-uploader .label-wrap,
+.bte-uploader > label {
+  display: none !important;
+}
+
+.bte-upload-hint-wrap,
+.bte-upload-hint-wrap > div {
+  padding: 0 !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.bte-upload-hint {
+  margin: 0 0 10px !important;
+  color: var(--bte-muted) !important;
+  font-size: 13px !important;
+  font-weight: 650 !important;
+  text-align: center !important;
+}
+
 .bte-shell .file-preview,
 .bte-shell [data-testid="file"],
 .bte-shell .upload-container,
@@ -851,7 +1275,7 @@ button.primary::after {
 .bte-shell .dropzone,
 .bte-shell [class*="drop"],
 .bte-shell [class*="upload"] {
-  background: linear-gradient(180deg, #fbfdff, #f4f7fb) !important;
+  background: var(--bte-page) !important;
   border-color: #d8e2ee !important;
   border-radius: 18px !important;
   color: var(--bte-ink) !important;
@@ -859,7 +1283,7 @@ button.primary::after {
 
 .bte-uploader [class*="drop"],
 .bte-uploader [class*="upload"] {
-  min-height: 220px !important;
+  min-height: 250px !important;
 }
 
 .bte-selected-document {
@@ -871,9 +1295,7 @@ button.primary::after {
   border: 1px solid #d8e2ee;
   border-radius: 18px;
   padding: 22px;
-  background:
-    linear-gradient(180deg, rgba(234, 248, 242, 0.78), rgba(255, 255, 255, 0.94)),
-    #ffffff;
+  background: var(--bte-surface);
 }
 
 .bte-selected-document h3 {
@@ -897,7 +1319,7 @@ button.primary::after {
   place-items: center;
   border-radius: 18px;
   border: 1px solid rgba(18, 128, 92, 0.22);
-  background: #ffffff;
+  background: var(--bte-surface);
   box-shadow: 0 14px 28px rgba(18, 128, 92, 0.12);
 }
 
@@ -965,7 +1387,7 @@ button.bte-action *,
 .gradio-container details {
   border-color: var(--bte-line) !important;
   border-radius: 14px !important;
-  background: rgba(255, 255, 255, 0.86) !important;
+  background: var(--bte-surface) !important;
   box-shadow: none !important;
 }
 
@@ -980,11 +1402,15 @@ button.bte-action *,
 }
 
 .bte-report {
+  width: var(--bte-rail) !important;
+  max-width: var(--bte-rail) !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
   border: 1px solid var(--bte-line);
-  border-radius: 24px;
+  border-radius: var(--bte-radius);
   padding: 22px;
-  background: rgba(255, 255, 255, 0.95);
-  box-shadow: 0 22px 70px rgba(17, 24, 39, 0.08);
+  background: var(--bte-surface);
+  box-shadow: var(--bte-shadow);
 }
 
 .bte-report--empty {
@@ -993,9 +1419,7 @@ button.bte-action *,
   place-items: center;
   text-align: center;
   color: var(--bte-muted);
-  background:
-    linear-gradient(180deg, rgba(239, 246, 255, 0.55), rgba(255, 255, 255, 0.96)),
-    #ffffff;
+  background: var(--bte-surface);
 }
 
 .bte-report--empty h2 {
@@ -1010,9 +1434,7 @@ button.bte-action *,
   gap: 28px;
   overflow: hidden;
   position: relative;
-  background:
-    linear-gradient(120deg, rgba(239, 246, 255, 0.92), rgba(255, 255, 255, 0.96)),
-    #ffffff;
+  background: var(--bte-surface);
 }
 
 .bte-loading-report::after {
@@ -1031,7 +1453,7 @@ button.bte-action *,
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: #ffffff;
+  background: var(--bte-surface);
   border: 1px solid #dbeafe;
   box-shadow: 0 18px 48px rgba(37, 99, 235, 0.14);
 }
@@ -1087,7 +1509,7 @@ button.bte-action *,
   padding: 14px;
   border: 1px solid var(--bte-line);
   border-radius: 16px;
-  background: rgba(255, 255, 255, 0.74);
+  background: var(--bte-surface);
 }
 
 .bte-loading-stack span,
@@ -1222,7 +1644,7 @@ button.bte-action *,
   border: 1px solid var(--bte-line);
   border-radius: 16px;
   padding: 14px;
-  background: #fbfdff;
+  background: var(--bte-surface);
 }
 
 .bte-metric span {
@@ -1285,7 +1707,7 @@ button.bte-action *,
 .bte-marker {
   border: 1px solid var(--bte-line);
   border-radius: 16px;
-  background: #ffffff;
+  background: var(--bte-surface);
   overflow: hidden;
 }
 
@@ -1377,7 +1799,7 @@ button.bte-action *,
   margin: 0;
   padding: 12px;
   border-radius: 12px;
-  background: #f7f9fc;
+  background: var(--bte-page);
   color: var(--bte-muted);
 }
 
@@ -1385,7 +1807,7 @@ button.bte-action *,
   border: 1px solid var(--bte-line);
   border-radius: 18px;
   padding: 16px;
-  background: #fbfdff;
+  background: var(--bte-surface);
   align-self: start;
 }
 
@@ -1410,6 +1832,218 @@ button.bte-action *,
 
 .bte-disclaimer strong {
   color: var(--bte-ink);
+}
+
+.bte-ideal-doc {
+  width: 100% !important;
+  max-width: 100% !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  margin-top: 18px;
+  border: 1px solid var(--bte-line);
+  border-radius: var(--bte-radius);
+  padding: 22px;
+  background: var(--bte-surface);
+  box-shadow: var(--bte-shadow);
+  overflow: hidden;
+}
+
+.bte-ideal-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 22px;
+  padding: 24px;
+  border-radius: 20px;
+  color: #ffffff;
+  background:
+    linear-gradient(120deg, rgba(18, 128, 92, 0.98) 0%, rgba(37, 99, 235, 0.95) 58%, rgba(191, 52, 52, 0.82) 100%),
+    #12805c;
+}
+
+.bte-ideal-hero .bte-kicker,
+.bte-ideal-hero h2,
+.bte-ideal-hero p {
+  color: #ffffff !important;
+}
+
+.bte-ideal-hero h2 {
+  font-size: clamp(30px, 4vw, 42px) !important;
+  line-height: 1.06 !important;
+  margin: 0 0 8px !important;
+}
+
+.bte-ideal-hero p {
+  max-width: 680px;
+  margin: 0;
+  opacity: 0.88;
+}
+
+.bte-ideal-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.bte-ideal-stat {
+  padding: 16px;
+  border: 1px solid var(--bte-line);
+  border-radius: 18px;
+  background: var(--bte-surface);
+}
+
+.bte-ideal-stat span,
+.bte-ideal-stat strong,
+.bte-ideal-stat small {
+  display: block;
+}
+
+.bte-ideal-stat span {
+  font-size: 34px;
+  font-weight: 780;
+  line-height: 1;
+  margin-bottom: 8px;
+}
+
+.bte-ideal-stat small {
+  color: var(--bte-muted);
+}
+
+.bte-ideal-stat--total span {
+  color: var(--bte-ink);
+}
+
+.bte-ideal-stat--ideal {
+  border-color: rgba(18, 128, 92, 0.22);
+  background: var(--bte-green-soft);
+}
+
+.bte-ideal-stat--ideal span {
+  color: var(--bte-green);
+}
+
+.bte-ideal-stat--normal {
+  border-color: rgba(37, 99, 235, 0.22);
+  background: var(--bte-blue-soft);
+}
+
+.bte-ideal-stat--normal span {
+  color: var(--bte-blue);
+}
+
+.bte-ideal-stat--bad {
+  border-color: rgba(191, 52, 52, 0.2);
+  background: var(--bte-red-soft);
+}
+
+.bte-ideal-stat--bad span {
+  color: var(--bte-red);
+}
+
+.bte-ideal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.bte-ideal-marker {
+  border: 1px solid var(--bte-line);
+  border-radius: 18px;
+  padding: 16px;
+  background: var(--bte-surface);
+}
+
+.bte-ideal-marker--ideal {
+  border-color: rgba(18, 128, 92, 0.22);
+}
+
+.bte-ideal-marker--normal {
+  border-color: rgba(37, 99, 235, 0.22);
+}
+
+.bte-ideal-marker--bad {
+  border-color: rgba(191, 52, 52, 0.2);
+  background: linear-gradient(180deg, #fff8f8, #ffffff);
+}
+
+.bte-ideal-marker-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  align-items: start;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--bte-line);
+}
+
+.bte-ideal-marker-head h3 {
+  margin: 7px 0 0 !important;
+  color: var(--bte-ink) !important;
+  font-size: 22px !important;
+  line-height: 1.1 !important;
+}
+
+.bte-ideal-marker-head strong {
+  color: var(--bte-ink);
+  font-size: 26px;
+  white-space: nowrap;
+}
+
+.bte-ideal-marker-head small {
+  color: var(--bte-muted);
+  font-size: 13px;
+}
+
+.bte-ideal-status {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 7px 10px;
+  font-size: 12px;
+  font-weight: 760;
+}
+
+.bte-ideal-marker--ideal .bte-ideal-status {
+  color: var(--bte-green);
+  background: var(--bte-green-soft);
+}
+
+.bte-ideal-marker--normal .bte-ideal-status {
+  color: var(--bte-blue);
+  background: var(--bte-blue-soft);
+}
+
+.bte-ideal-marker--bad .bte-ideal-status {
+  color: var(--bte-red);
+  background: var(--bte-red-soft);
+}
+
+.bte-ideal-marker-body {
+  display: grid;
+  gap: 12px;
+  padding-top: 14px;
+}
+
+.bte-ideal-marker-body div {
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--bte-page);
+}
+
+.bte-ideal-marker-body span {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--bte-ink);
+  font-size: 12px;
+  font-weight: 760;
+  text-transform: uppercase;
+}
+
+.bte-ideal-marker-body p {
+  margin: 0;
+  color: var(--bte-muted);
+  font-size: 14px;
+  line-height: 1.5;
 }
 
   @media (max-width: 860px) {
@@ -1441,6 +2075,34 @@ button.bte-action *,
     min-width: 0 !important;
   }
 
+  .gradio-container {
+    padding-inline: 12px !important;
+    width: calc(100vw - 64px) !important;
+    max-width: calc(100vw - 64px) !important;
+    overflow-x: hidden !important;
+  }
+
+  .bte-title,
+  .bte-step-row-block,
+  .bte-hero-grid,
+  .bte-shell,
+  .bte-formation {
+    width: calc(100vw - 88px) !important;
+    max-width: calc(100vw - 88px) !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+  }
+
+  .bte-title > *,
+  .bte-title *,
+  .bte-hero-grid > *,
+  .bte-api-key-panel,
+  .bte-api-key-panel * {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow-wrap: anywhere;
+  }
+
   .gradio-container input,
   .gradio-container textarea,
   .gradio-container button {
@@ -1449,7 +2111,9 @@ button.bte-action *,
   }
 
   .bte-title {
-    padding: 22px 4px 16px;
+    padding: 22px 16px 18px;
+    grid-template-columns: 1fr;
+    gap: 18px;
   }
 
   .bte-title h1,
@@ -1464,8 +2128,50 @@ button.bte-action *,
     overflow-wrap: anywhere;
   }
 
+  .bte-hero-grid {
+    display: grid !important;
+    grid-template-columns: 1fr !important;
+  }
+
+  .bte-step-row {
+    grid-template-columns: 1fr;
+  }
+
+  .bte-title,
+  .bte-step-row .bte-step-heading:nth-child(2),
+  .bte-step-row .bte-step-heading:nth-child(3),
+  .bte-hero-grid > :nth-child(2),
+  .bte-hero-grid > :nth-child(3),
+  .bte-run-status,
+  .bte-report-anchor,
+  .bte-ideal-doc {
+    display: none !important;
+  }
+
+  .bte-workflow-panel--upload,
+  .bte-workflow-panel--analysis {
+    min-width: 0 !important;
+  }
+
+  .bte-api-key-panel {
+    margin: 0;
+    max-width: 100%;
+    justify-self: stretch;
+  }
+
+  .bte-step-heading {
+    min-height: auto;
+    align-items: start;
+    margin-bottom: 10px;
+  }
+
+  .bte-step-heading h2 {
+    font-size: 19px !important;
+    overflow-wrap: anywhere;
+  }
+
   .bte-shell {
-    border-radius: 18px;
+    border-radius: var(--bte-radius);
     padding: 12px;
   }
 
@@ -1476,7 +2182,7 @@ button.bte-action *,
   .bte-formation {
     min-height: 560px;
     padding: 14px;
-    border-radius: 20px;
+    border-radius: var(--bte-radius);
   }
 
   .bte-formation-stage {
@@ -1534,7 +2240,7 @@ button.bte-action *,
   }
 
   .bte-report {
-    border-radius: 20px;
+    border-radius: var(--bte-radius);
     padding: 16px;
   }
 
@@ -1572,25 +2278,77 @@ button.bte-action *,
   .bte-marker-value {
     text-align: left;
   }
+
+  .bte-ideal-hero {
+    display: grid;
+    padding: 18px;
+  }
+
+  .bte-ideal-stats,
+  .bte-ideal-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .bte-ideal-marker-head {
+    display: grid;
+  }
+
+  .bte-ideal-marker-head strong {
+    white-space: normal;
+  }
 }
 
 """
 
 
 with gr.Blocks(title="Blood Test Explainer") as demo:
+    with gr.Row(equal_height=True, elem_classes=["bte-title"]):
+        with gr.Column(scale=6, min_width=420, elem_classes=["bte-title-copy"]):
+            gr.HTML(
+                """
+                <div>
+                  <p class="bte-kicker">Clinical clarity from raw documents</p>
+                  <h1>Blood Test Explainer</h1>
+                  <p>Upload a lab report and turn dense medical paperwork into a polished extraction report with raw markers, values, units, reference ranges, and confidence signals.</p>
+                </div>
+                """
+            )
+        with gr.Column(scale=4, min_width=360):
+            with gr.Group(elem_classes=["bte-api-key-panel"]):
+                api_key_override = gr.Textbox(
+                    label="OpenBMB API key",
+                    type="password",
+                    placeholder="Paste your OpenBMB API key",
+                    interactive=True,
+                )
+
     gr.HTML(
         """
-        <section class="bte-title">
-          <p class="bte-kicker">Clinical clarity from raw documents</p>
-          <h1>Blood Test Explainer</h1>
-          <p>Upload a lab report and turn dense medical paperwork into a polished extraction report with raw markers, values, units, reference ranges, and confidence signals.</p>
-        </section>
-        """
+        <div class="bte-step-row">
+          <div class="bte-step-heading">
+            <span>1</span>
+            <h2>Upload your blood tests in any suitable format</h2>
+          </div>
+          <div class="bte-step-heading">
+            <span>2</span>
+            <h2>Wait until it's analysed by our AI Agents</h2>
+          </div>
+          <div class="bte-step-heading">
+            <span>3</span>
+            <h2>Get your blood test results in the clearest possible format</h2>
+          </div>
+        </div>
+        """,
+        elem_classes=["bte-step-row-block"],
     )
 
     with gr.Row(equal_height=False, elem_classes=["bte-hero-grid"]):
         with gr.Column(scale=4, min_width=320):
             with gr.Group(elem_classes=["bte-shell", "bte-upload-card"]):
+                gr.HTML(
+                    '<p class="bte-upload-hint">Supported formats: PDF, PNG, JPEG</p>',
+                    elem_classes=["bte-upload-hint-wrap"],
+                )
                 with gr.Group() as upload_dropzone:
                     uploaded = gr.File(
                         label="Upload medical test document",
@@ -1602,31 +2360,17 @@ with gr.Blocks(title="Blood Test Explainer") as demo:
                 selected_document = gr.HTML(selected_document_html(), visible=False)
                 run_button = gr.Button("Extract test results", variant="primary", elem_classes=["bte-action"])
 
-        with gr.Column(scale=5, min_width=360):
-            gr.HTML(formation_animation_html())
+        with gr.Column(scale=4, min_width=300):
+            gr.HTML(analysis_animation_html())
 
-    with gr.Accordion("Advanced extraction settings", open=False):
-        with gr.Group(elem_classes=["bte-shell", "bte-engine", "bte-engine-compact"]):
-            api_url = gr.Textbox(
-                label="OpenBMB chat completions URL",
-                value=os.getenv("OPENBMB_API_URL") or DEFAULT_API_URL,
-                interactive=True,
-            )
-            model = gr.Textbox(
-                label="Model",
-                value=os.getenv("OPENBMB_MODEL") or DEFAULT_MODEL,
-                interactive=True,
-            )
-            api_key_override = gr.Textbox(
-                label="OpenBMB API key override",
-                type="password",
-                placeholder="Optional. Paste exact token here for local testing.",
-                interactive=True,
-            )
-            max_pages = gr.Slider(1, 8, value=3, step=1, label="PDF pages to inspect")
-            gr.HTML(api_status(), elem_classes=["bte-status"])
+        with gr.Column(scale=4, min_width=300):
+            gr.HTML(result_preview_html())
 
-    status = gr.HTML(_status_html("Ready", "Upload a lab report to create the first interactive extraction draft."))
+    status = gr.HTML(
+        _status_html("Ready", "Upload a lab report to create the first interactive extraction draft."),
+        elem_classes=["bte-status-row"],
+        visible=False,
+    )
 
     uploaded.change(
         upload_state,
@@ -1635,48 +2379,23 @@ with gr.Blocks(title="Blood Test Explainer") as demo:
         show_progress="hidden",
     )
 
-    gr.HTML('<div id="bte-report-anchor" class="bte-report-anchor"></div>', visible=True)
     with gr.Group(visible=False) as report_panel:
-        with gr.Tabs():
-            with gr.Tab("Report"):
-                report = gr.HTML(empty_report_html())
-            with gr.Tab("Values"):
-                results = gr.Dataframe(
-                    headers=TABLE_HEADERS,
-                    datatype=["str", "str", "str", "str", "str", "number", "str"],
-                    row_count=(0, "dynamic"),
-                    column_count=(len(TABLE_HEADERS), "fixed"),
-                    label="Extracted values",
-                    wrap=True,
-                )
-            with gr.Tab("JSON"):
-                structured_json = gr.Code(language="json", label="Normalized extraction")
-            with gr.Tab("Raw"):
-                raw_response = gr.Textbox(label="Raw model response", lines=12)
+        report = gr.HTML(empty_report_html())
 
     run_button.click(
         show_processing,
         outputs=[status, report_panel, report],
         scroll_to_output=True,
         show_progress="hidden",
-        js="""
-        () => {
-          setTimeout(() => {
-            document.getElementById("bte-report-anchor")?.scrollIntoView({
-              behavior: "smooth",
-              block: "start"
-            });
-          }, 450);
-          return [];
-        }
-        """,
     ).then(
         extract_lab_values,
-        inputs=[uploaded, api_url, model, api_key_override, max_pages],
-        outputs=[results, status, structured_json, raw_response, report, report_panel],
+        inputs=[uploaded, api_key_override],
+        outputs=[status, report, report_panel],
         scroll_to_output=True,
         show_progress="hidden",
     )
+
+    gr.HTML(ideal_document_example_html(), elem_classes=["bte-ideal-row"])
 
 
 if __name__ == "__main__":
