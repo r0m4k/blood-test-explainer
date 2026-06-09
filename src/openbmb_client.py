@@ -160,11 +160,15 @@ def _normalize_api_key(value: str | None) -> str | None:
 
 
 def _parse_json_response(text: str) -> dict[str, Any]:
-    cleaned = _strip_code_fence(text)
+    cleaned = _strip_think(_strip_code_fence(text))
     parsed = _loads_model_json(cleaned)
 
+    # Some models (e.g. MiniCPM-V in "thinking" mode) return a bare array of tests
+    # instead of the {tests, notes} object. Wrap it so the rest of the app is unchanged.
+    if isinstance(parsed, list):
+        return {"tests": parsed, "notes": []}
     if not isinstance(parsed, dict):
-        raise ValueError("Model response JSON must be an object.")
+        raise ValueError("Model response JSON must be an object or array.")
     return parsed
 
 
@@ -175,9 +179,9 @@ def _loads_model_json(text: str) -> Any:
         try:
             return json.loads(text, strict=False)
         except json.JSONDecodeError:
-            match = re.search(r"\{.*\}", text, flags=re.DOTALL)
+            match = re.search(r"\[.*\]|\{.*\}", text, flags=re.DOTALL)
             if not match:
-                raise ValueError("Model response did not contain a JSON object.")
+                raise ValueError("Model response did not contain JSON.")
             snippet = match.group(0)
             try:
                 return json.loads(snippet)
@@ -194,6 +198,14 @@ def _strip_code_fence(text: str) -> str:
         stripped = re.sub(r"^```(?:json)?\s*", "", stripped, flags=re.IGNORECASE)
         stripped = re.sub(r"\s*```$", "", stripped)
     return stripped.strip()
+
+
+_THINK_RE = re.compile(r"<think(?:ing)?>.*?</think(?:ing)?>", flags=re.DOTALL | re.IGNORECASE)
+
+
+def _strip_think(text: str) -> str:
+    """Drop <think>...</think> reasoning blocks some models emit before the JSON."""
+    return _THINK_RE.sub("", text).strip()
 
 
 def _normalize_tests(value: Any) -> list[dict[str, Any]]:

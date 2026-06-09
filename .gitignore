@@ -12,11 +12,13 @@ train/data/
 eval/data/synth*
 runs/
 
-# Model artifacts (bundle the final GGUF via git-lfs deliberately, not by accident)
+# Model artifacts — never commit downloaded/large weights by accident.
 *.safetensors
 *.bin
+*.gguf
 adapters/
-# NOTE: the shipped GGUF + mmproj are tracked via .gitattributes (git-lfs), not ignored.
+models/
+# NOTE: if you ever ship a GGUF inside the repo, track it deliberately via git-lfs.
 
 # OS / editor
 .DS_Store
