@@ -30,16 +30,39 @@ python train/synth_reports.py --n 12 --out train/data/preview   # eyeball the im
 ```
 
 ## The fine-tune → offline pipeline (run these in order)
+### Step 0: validate offline with the official base GGUF first
+Before fine-tuning, prove the local backend works with OpenBMB's official base GGUF + mmproj:
+
+```bash
+# Install llama.cpp tooling locally.
+brew install llama.cpp
+
+# Download official base GGUF assets, including the official mmproj.
+mkdir -p models
+huggingface-cli download openbmb/MiniCPM-V-4.6-gguf --local-dir ./models
+
+# Point LOCAL_MODEL_PATH at the downloaded base LLM GGUF, and LOCAL_MMPROJ_PATH at the
+# downloaded mmproj GGUF. Use the exact filenames from ./models.
+export EXTRACTOR_BACKEND=local
+export LOCAL_MODEL_PATH=./models/<official-base-model>.gguf
+export LOCAL_MMPROJ_PATH=./models/<official-mmproj>.gguf
+python app.py
+```
+
+Confirm extraction works fully offline before starting the fine-tune.
+
 ```bash
 # 1) Fine-tune MiniCPM-V on Modal (data generated on the box; needs Modal credits).
-#    First confirm MODEL_TYPE/MODEL_ID in train/modal_finetune.py against `swift sft --help`.
+#    First confirm MODEL_TYPE in train/modal_finetune.py against the MiniCPM-V finetune guide.
 modal run train/modal_finetune.py --n 4000 --epochs 2
 
 # 2) Pull adapters from the Modal volume 'blood-test-adapters', then merge.
-python scripts/merge_lora.py --base openbmb/MiniCPM-V-4_6 \
+python scripts/merge_lora.py --base openbmb/MiniCPM-V-4.6 \
     --adapters ./adapters/minicpmv-lab-lora --out ./merged-minicpmv-lab
 
-# 3) Convert to GGUF + mmproj and quantize Q4_K_M (needs a llama.cpp checkout).
+# 3) Convert only the merged LLM to GGUF and quantize Q4_K_M.
+#    The script downloads/reuses the official openbmb/MiniCPM-V-4.6-gguf mmproj because LoRA
+#    touches the LLM, not the vision encoder.
 LLAMA_CPP=./llama.cpp bash scripts/convert_to_gguf.sh ./merged-minicpmv-lab
 
 # 4) Point the app at the local model and go offline.
@@ -68,7 +91,7 @@ EXTRACTOR_BACKEND=local LOCAL_MODEL_PATH=... LOCAL_MMPROJ_PATH=... \
 
 ## Verify-on-hardware (can't be tested in CI)
 1. `train/modal_finetune.py`: confirm the ms-swift `MODEL_TYPE` for **MiniCPM-V 4.6**.
-2. `scripts/convert_to_gguf.sh`: llama.cpp multimodal script paths/`MINICPMV_VERSION` for 4.6.
+2. `scripts/convert_to_gguf.sh`: llama.cpp `convert_hf_to_gguf.py` path and official mmproj filename for 4.6.
 3. `src/extraction/local_minicpmv.py`: the `LOCAL_CHAT_HANDLER` class for your llama-cpp-python build.
 
 ## Still TODO (next PRs, not this one)

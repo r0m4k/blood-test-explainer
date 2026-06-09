@@ -2,7 +2,7 @@
 """Merge the LoRA adapters into the MiniCPM-V base → a standalone HF model for GGUF conversion.
 
     python scripts/merge_lora.py \
-        --base openbmb/MiniCPM-V-4_6 \
+        --base openbmb/MiniCPM-V-4.6 \
         --adapters ./adapters/minicpmv-lab-lora \
         --out ./merged-minicpmv-lab
 """
