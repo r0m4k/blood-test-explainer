@@ -10,19 +10,19 @@ down and convert to GGUF (see scripts/convert_to_gguf.sh).
 
 Running the fine-tune on Modal also satisfies the Modal prize.
 
-⚠️ VERIFY-ON-FIRST-RUN: the ms-swift `--model_type` for the exact MiniCPM-V 4.6 checkpoint and
-its current dataset-format flags. ms-swift evolves; confirm against `swift sft --help` and the
-MiniCPM-V model card, then pin the value in MODEL_TYPE / MODEL_ID below. The data generation,
-conversion, and plumbing are correct; the trainer invocation is the one thing to confirm.
+⚠️ VERIFY-ON-FIRST-RUN: confirm the exact ms-swift/LLaMA-Factory `--model_type` for MiniCPM-V
+4.6 against the finetune guide at github.com/OpenBMB/MiniCPM-V before running. Trainer CLIs
+evolve; pin the value in MODEL_TYPE below after checking the current guide.
 """
 
 from __future__ import annotations
 
 import modal
 
-# TODO(verify): confirm these against the MiniCPM-V 4.6 model card + `swift sft --help`.
-MODEL_ID = "openbmb/MiniCPM-V-4_6"          # HF id of the base vision model
-MODEL_TYPE = "minicpm-v-v2_6-chat"          # ms-swift model_type; confirm the 4.6 value
+# TODO(verify): confirm the exact ms-swift/LLaMA-Factory model_type for MiniCPM-V 4.6
+# against the finetune guide at github.com/OpenBMB/MiniCPM-V before running.
+MODEL_ID = "openbmb/MiniCPM-V-4.6"          # HF id of the base vision model
+MODEL_TYPE = "minicpm-v-v2_6-chat"          # placeholder until confirmed from the guide
 
 app = modal.App("blood-test-finetune")
 
