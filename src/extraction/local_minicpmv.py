@@ -32,6 +32,7 @@ from src.openbmb_client import (
     EXTRACTION_PROMPT,
     ExtractionResult,
     _normalize_notes,
+    _normalize_patient,
     _normalize_tests,
 )
 
@@ -91,6 +92,7 @@ class LocalMiniCPMVExtractor:
             parsed = {}
 
         return ExtractionResult(
+            patient=_normalize_patient(parsed.get("patient", {})),
             tests=_normalize_tests(parsed.get("tests", [])),
             notes=_normalize_notes(parsed.get("notes", [])),
             raw_response=raw,

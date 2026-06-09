@@ -1,0 +1,614 @@
+{
+  "schema_version": "1.1",
+  "title": "Complete Blood Count Knowledge Graph",
+  "purpose": "Educational knowledge graph for CBC markers mentioned in the GNU Health laboratory report sample. It is intended for explanation agents, not diagnosis or treatment.",
+  "medical_disclaimer": "Reference intervals vary by laboratory method, sex, pregnancy status, altitude, acute illness, medications, and clinical context. Abnormal values should be interpreted by a qualified clinician.",
+  "age_group_definitions": {
+    "child": "1-12 years, excluding neonates/infants when a source gave separate infant intervals",
+    "teenager": "13-17 years",
+    "adult": "18-64 years",
+    "elder": "65+ years; adult CBC intervals are reused unless a source provides an elder-specific or sex-specific threshold"
+  },
+  "sex_definitions": {
+    "male": "Patient sex category as reported by the lab or patient record. Do not infer from name.",
+    "female": "Patient sex category as reported by the lab or patient record. Pregnancy, menstruation, menopause, and hormone therapy can change interpretation.",
+    "unknown": "Use when sex is absent, unclear, nonbinary, or not safely mappable to a binary lab reference interval. Prefer the lab-provided reference range and show a caution."
+  },
+  "sex_significance_policy": "Agents should extract patient sex when present and pass it through the pipeline. For markers with sex_specific_statistics_per_group_age, prefer the sex-specific interval over the age-only fallback. If sex is unknown or the patient context does not fit binary lab intervals, use the lab's own reference range first and explain that sex-specific interpretation may require clinician review.",
+  "statistics_method": "For each age group, minimal_value and maximum_value represent the lower and upper educational reference interval endpoints. normal_value is the midpoint of that interval, rounded to 2 decimals where useful. Age-only statistics are fallback ranges; sex_specific_statistics_per_group_age is preferred when present and patient sex is known.",
+  "sources": {
+    "medlineplus_cbc": "https://medlineplus.gov/lab-tests/complete-blood-count-cbc/",
+    "medlineplus_rbc": "https://medlineplus.gov/lab-tests/red-blood-cell-rbc-count/",
+    "medlineplus_differential": "https://medlineplus.gov/lab-tests/blood-differential/",
+    "medlineplus_differential_encyclopedia": "https://medlineplus.gov/ency/article/003657.htm",
+    "medlineplus_esr": "https://medlineplus.gov/lab-tests/erythrocyte-sedimentation-rate-esr/",
+    "uiowa_cbc_reference": "https://www.healthcare.uiowa.edu/path_handbook/handbook/test299.html",
+    "uiowa_pediatric_reference": "https://www.healthcare.uiowa.edu/path_handbook/appendix/heme/pediatric_normals.html",
+    "seattle_childrens_hematocrit": "https://seattlechildrenslab.testcatalog.org/show/LAB289--1",
+    "seattle_childrens_platelet": "https://seattlechildrenslab.testcatalog.org/show/LAB301-1",
+    "seattle_childrens_esr": "https://seattlechildrenslab.testcatalog.org/show/LAB322-1",
+    "uchicago_cbc_diff": "https://uchicagomedlabs.testcatalog.org/show/CBCDIFF-1",
+    "uchicago_esr_reference": "https://uchicagomedlabs.testcatalog.org/show/ESR-1",
+    "cleveland_clinic_esr": "https://my.clevelandclinic.org/health/diagnostics/17747-sed-rate-erythrocyte-sedimentation-rate-or-esr-test",
+    "nih_ods_iron": "https://ods.od.nih.gov/factsheets/Iron-HealthProfessional/",
+    "nih_ods_b12": "https://ods.od.nih.gov/factsheets/VitaminB12-HealthProfessional/",
+    "nih_ods_folate": "https://ods.od.nih.gov/factsheets/Folate-HealthProfessional/",
+    "cdc_physical_activity": "https://www.cdc.gov/physical-activity-basics/guidelines/index.html"
+  },
+  "tests": [
+    {
+      "id": "hemoglobin",
+      "display_name": "Hemoglobin",
+      "aliases": ["HGB", "Hb", "Hgb"],
+      "category": "CBC red cell marker",
+      "unit": "g/dL",
+      "description": "Hemoglobin is the iron-containing protein inside red blood cells that carries oxygen from the lungs to body tissues.",
+      "why_important": "It is a core screen for anemia, blood loss, dehydration-related concentration changes, and disorders affecting oxygen delivery.",
+      "sex_significance": {
+        "level": "high",
+        "summary": "Adult and post-pubertal male reference intervals are typically higher than female intervals. Pregnancy and menstruation can further affect interpretation.",
+        "pipeline_guidance": "If patient sex is known, prefer sex_specific_statistics_per_group_age for comparison. If sex is unknown, nonbinary, pregnancy is possible, or hormone therapy is relevant, prefer the lab-provided reference range and include a clinician-context caution."
+      },
+      "sex_specific_statistics_per_group_age": {
+        "child": {
+          "male": {"minimal_value": 10.9, "normal_value": 12.95, "maximum_value": 15.0},
+          "female": {"minimal_value": 10.9, "normal_value": 12.95, "maximum_value": 15.0},
+          "unknown": {"minimal_value": 10.9, "normal_value": 12.95, "maximum_value": 15.0}
+        },
+        "teenager": {
+          "male": {"minimal_value": 13.2, "normal_value": 15.45, "maximum_value": 17.7},
+          "female": {"minimal_value": 11.9, "normal_value": 13.7, "maximum_value": 15.5},
+          "unknown": {"minimal_value": 11.9, "normal_value": 14.35, "maximum_value": 17.7}
+        },
+        "adult": {
+          "male": {"minimal_value": 13.2, "normal_value": 15.45, "maximum_value": 17.7},
+          "female": {"minimal_value": 11.9, "normal_value": 13.7, "maximum_value": 15.5},
+          "unknown": {"minimal_value": 11.9, "normal_value": 14.35, "maximum_value": 17.7}
+        },
+        "elder": {
+          "male": {"minimal_value": 13.2, "normal_value": 15.45, "maximum_value": 17.7},
+          "female": {"minimal_value": 11.9, "normal_value": 13.7, "maximum_value": 15.5},
+          "unknown": {"minimal_value": 11.9, "normal_value": 14.35, "maximum_value": 17.7}
+        }
+      },
+      "instructions_to_improve": {
+        "food": ["If low, emphasize iron-rich foods such as lean meat, fish, poultry, legumes, tofu, spinach, and iron-fortified grains.", "Pair plant iron with vitamin C foods such as citrus, berries, peppers, or tomatoes to improve absorption.", "Include folate and vitamin B12 sources such as leafy greens, beans, eggs, dairy, fish, and fortified foods."],
+        "exercises": ["Use moderate aerobic activity and strength training as tolerated to support cardiovascular fitness.", "Avoid unusually intense training until unexplained anemia, shortness of breath, dizziness, or fatigue has been evaluated."],
+        "supplements": ["Discuss iron, vitamin B12, or folate testing and supplementation with a clinician before starting.", "Avoid iron supplements unless deficiency or clinical need is confirmed, because excess iron can be harmful."]
+      },
+      "statistics_per_group_age": {
+        "child": {"minimal_value": 10.9, "normal_value": 12.95, "maximum_value": 15.0},
+        "teenager": {"minimal_value": 11.9, "normal_value": 14.35, "maximum_value": 17.7},
+        "adult": {"minimal_value": 11.9, "normal_value": 14.45, "maximum_value": 17.7},
+        "elder": {"minimal_value": 11.9, "normal_value": 14.45, "maximum_value": 17.7}
+      },
+      "related_tests": ["rbc", "hct", "mcv", "mch", "mchc", "rdw_cv", "rdw_sd"],
+      "source_ids": ["medlineplus_cbc", "uiowa_cbc_reference", "uiowa_pediatric_reference", "nih_ods_iron", "nih_ods_b12", "nih_ods_folate"]
+    },
+    {
+      "id": "rbc",
+      "display_name": "Red Blood Cell Count",
+      "aliases": ["RBC", "Erythrocyte count", "Red cell count"],
+      "category": "CBC red cell marker",
+      "unit": "10^6/uL",
+      "description": "RBC count measures the number of red blood cells in a volume of blood.",
+      "why_important": "Red blood cells carry hemoglobin and oxygen; low or high counts can point toward anemia, blood loss, dehydration, lung or heart disease, marrow disorders, or other conditions.",
+      "sex_significance": {
+        "level": "high",
+        "summary": "Adult and adolescent male RBC intervals are usually higher than female intervals.",
+        "pipeline_guidance": "Use sex_specific_statistics_per_group_age when sex is known. For unknown or context-sensitive sex data, compare against the lab-provided range and avoid overcalling status from a broad fallback interval."
+      },
+      "sex_specific_statistics_per_group_age": {
+        "child": {
+          "male": {"minimal_value": 3.8, "normal_value": 4.6, "maximum_value": 5.5},
+          "female": {"minimal_value": 3.8, "normal_value": 4.6, "maximum_value": 5.5},
+          "unknown": {"minimal_value": 3.8, "normal_value": 4.6, "maximum_value": 5.5}
+        },
+        "teenager": {
+          "male": {"minimal_value": 4.3, "normal_value": 4.95, "maximum_value": 5.6},
+          "female": {"minimal_value": 3.9, "normal_value": 4.55, "maximum_value": 5.1},
+          "unknown": {"minimal_value": 3.9, "normal_value": 4.75, "maximum_value": 5.6}
+        },
+        "adult": {
+          "male": {"minimal_value": 4.5, "normal_value": 5.35, "maximum_value": 6.2},
+          "female": {"minimal_value": 4.0, "normal_value": 4.6, "maximum_value": 5.2},
+          "unknown": {"minimal_value": 4.0, "normal_value": 5.1, "maximum_value": 6.2}
+        },
+        "elder": {
+          "male": {"minimal_value": 4.5, "normal_value": 5.35, "maximum_value": 6.2},
+          "female": {"minimal_value": 4.0, "normal_value": 4.6, "maximum_value": 5.2},
+          "unknown": {"minimal_value": 4.0, "normal_value": 5.1, "maximum_value": 6.2}
+        }
+      },
+      "instructions_to_improve": {
+        "food": ["Support red blood cell production with iron, protein, folate, and vitamin B12 containing foods.", "Hydrate regularly; dehydration can concentrate blood counts and make RBC appear higher.", "Limit heavy alcohol intake because it can interfere with nutrition and marrow function."],
+        "exercises": ["Maintain regular aerobic activity and resistance training if cleared for exercise.", "If RBC is high with headaches, dizziness, sleep apnea symptoms, or smoking history, seek medical evaluation rather than trying to lower it with exercise alone."],
+        "supplements": ["Use iron, B12, or folate only when deficiency is suspected or confirmed.", "Do not use performance-enhancing drugs or unsupervised erythropoietin-like products."]
+      },
+      "statistics_per_group_age": {
+        "child": {"minimal_value": 3.8, "normal_value": 4.6, "maximum_value": 5.5},
+        "teenager": {"minimal_value": 3.9, "normal_value": 4.75, "maximum_value": 5.6},
+        "adult": {"minimal_value": 4.0, "normal_value": 5.1, "maximum_value": 6.2},
+        "elder": {"minimal_value": 4.0, "normal_value": 5.1, "maximum_value": 6.2}
+      },
+      "related_tests": ["hemoglobin", "hct", "mcv"],
+      "source_ids": ["medlineplus_rbc", "uiowa_cbc_reference"]
+    },
+    {
+      "id": "hct",
+      "display_name": "Hematocrit",
+      "aliases": ["HCT", "PCV", "Packed cell volume"],
+      "category": "CBC red cell marker",
+      "unit": "%",
+      "description": "Hematocrit is the percentage of whole blood volume made up of red blood cells.",
+      "why_important": "It helps evaluate anemia, blood loss, dehydration, and conditions that change red cell concentration.",
+      "sex_significance": {
+        "level": "high",
+        "summary": "Male hematocrit reference intervals are typically higher than female intervals after puberty. Pregnancy and menstruation can affect interpretation.",
+        "pipeline_guidance": "Use sex_specific_statistics_per_group_age when sex is known. If sex is unknown or pregnancy/hormone context is relevant, show the lab reference range as primary and mark the KG range as educational."
+      },
+      "sex_specific_statistics_per_group_age": {
+        "child": {
+          "male": {"minimal_value": 31, "normal_value": 37.5, "maximum_value": 44},
+          "female": {"minimal_value": 31, "normal_value": 37.5, "maximum_value": 44},
+          "unknown": {"minimal_value": 31, "normal_value": 37.5, "maximum_value": 44}
+        },
+        "teenager": {
+          "male": {"minimal_value": 37, "normal_value": 43, "maximum_value": 49},
+          "female": {"minimal_value": 36, "normal_value": 41, "maximum_value": 46},
+          "unknown": {"minimal_value": 36, "normal_value": 42.5, "maximum_value": 49}
+        },
+        "adult": {
+          "male": {"minimal_value": 40, "normal_value": 46, "maximum_value": 52},
+          "female": {"minimal_value": 35, "normal_value": 41, "maximum_value": 47},
+          "unknown": {"minimal_value": 35, "normal_value": 43.5, "maximum_value": 52}
+        },
+        "elder": {
+          "male": {"minimal_value": 40, "normal_value": 46, "maximum_value": 52},
+          "female": {"minimal_value": 35, "normal_value": 41, "maximum_value": 47},
+          "unknown": {"minimal_value": 35, "normal_value": 43.5, "maximum_value": 52}
+        }
+      },
+      "instructions_to_improve": {
+        "food": ["For low values, support red cell production with iron, B12, folate, protein, and overall adequate calories.", "For high values, maintain hydration and avoid smoking exposure when possible.", "Ask a clinician about causes before making major diet changes."],
+        "exercises": ["Follow general activity guidelines if well; conditioning supports oxygen use but does not replace evaluation for anemia.", "Pause strenuous activity and seek care for chest pain, fainting, severe shortness of breath, or marked fatigue."],
+        "supplements": ["Discuss iron/B12/folate supplementation only when deficiency or risk is present.", "Avoid unsupervised iron if hematocrit is high."]
+      },
+      "statistics_per_group_age": {
+        "child": {"minimal_value": 31, "normal_value": 37.5, "maximum_value": 44},
+        "teenager": {"minimal_value": 34, "normal_value": 41, "maximum_value": 48},
+        "adult": {"minimal_value": 35, "normal_value": 43.5, "maximum_value": 52},
+        "elder": {"minimal_value": 35, "normal_value": 43.5, "maximum_value": 52}
+      },
+      "related_tests": ["hemoglobin", "rbc"],
+      "source_ids": ["medlineplus_cbc", "uiowa_cbc_reference", "uiowa_pediatric_reference", "seattle_childrens_hematocrit"]
+    },
+    {
+      "id": "mcv",
+      "display_name": "Mean Corpuscular Volume",
+      "aliases": ["MCV"],
+      "category": "CBC red cell index",
+      "unit": "fL",
+      "description": "MCV measures the average size of red blood cells.",
+      "why_important": "Small cells may suggest iron-related or thalassemia patterns; large cells may suggest B12, folate, alcohol, liver, thyroid, medication, or marrow-related patterns.",
+      "sex_significance": {
+        "level": "low",
+        "summary": "MCV is usually interpreted with age and lab method rather than sex. Sex still matters indirectly because hemoglobin, RBC, and hematocrit ranges differ by sex.",
+        "pipeline_guidance": "Use the age-group interval unless the report provides a sex-specific lab range. Keep nearby red-cell markers sex-aware."
+      },
+      "instructions_to_improve": {
+        "food": ["If low, ensure adequate iron intake and pair plant iron with vitamin C.", "If high, ensure adequate B12 and folate intake from animal foods, fortified foods, leafy greens, and legumes.", "Reduce heavy alcohol intake if relevant."],
+        "exercises": ["Exercise does not directly normalize MCV, but regular activity supports overall metabolic health.", "Avoid overtraining if anemia symptoms are present."],
+        "supplements": ["Discuss iron studies, B12, folate, thyroid, and liver evaluation before supplementing.", "Use B12 or folate supplements when dietary intake, absorption risk, or testing supports the need."]
+      },
+      "statistics_per_group_age": {
+        "child": {"minimal_value": 75, "normal_value": 82.5, "maximum_value": 90},
+        "teenager": {"minimal_value": 79, "normal_value": 87, "maximum_value": 95},
+        "adult": {"minimal_value": 82, "normal_value": 90.5, "maximum_value": 99},
+        "elder": {"minimal_value": 82, "normal_value": 90.5, "maximum_value": 99}
+      },
+      "related_tests": ["hemoglobin", "mch", "mchc", "rdw_cv", "rdw_sd"],
+      "source_ids": ["medlineplus_cbc", "uiowa_cbc_reference", "nih_ods_iron", "nih_ods_b12", "nih_ods_folate"]
+    },
+    {
+      "id": "mch",
+      "display_name": "Mean Corpuscular Hemoglobin",
+      "aliases": ["MCH"],
+      "category": "CBC red cell index",
+      "unit": "pg",
+      "description": "MCH estimates the average amount of hemoglobin in each red blood cell.",
+      "why_important": "It helps classify anemia patterns and is interpreted with hemoglobin, MCV, MCHC, and RDW.",
+      "sex_significance": {
+        "level": "low",
+        "summary": "MCH is generally not separated by sex in common CBC reference tables, but interpretation depends on sex-aware hemoglobin and RBC context.",
+        "pipeline_guidance": "Use the age-group interval unless the lab report includes a sex-specific range."
+      },
+      "instructions_to_improve": {
+        "food": ["Support hemoglobin production with iron-rich foods, protein, B12, and folate.", "Pair plant iron with vitamin C and avoid taking tea or coffee with iron-rich meals if iron deficiency is a concern.", "Maintain balanced meals rather than focusing on one nutrient only."],
+        "exercises": ["Use gentle-to-moderate activity if anemia symptoms are mild and cleared by a clinician.", "Delay intense endurance training when unexplained low red-cell indices are present."],
+        "supplements": ["Discuss iron, B12, and folate supplementation based on lab confirmation.", "Avoid stacking multiple blood-building supplements without clinician guidance."]
+      },
+      "statistics_per_group_age": {
+        "child": {"minimal_value": 23, "normal_value": 29, "maximum_value": 35},
+        "teenager": {"minimal_value": 25, "normal_value": 30, "maximum_value": 35},
+        "adult": {"minimal_value": 25, "normal_value": 30, "maximum_value": 35},
+        "elder": {"minimal_value": 25, "normal_value": 30, "maximum_value": 35}
+      },
+      "related_tests": ["mcv", "mchc", "hemoglobin"],
+      "source_ids": ["uiowa_cbc_reference", "uiowa_pediatric_reference", "nih_ods_iron"]
+    },
+    {
+      "id": "mchc",
+      "display_name": "Mean Corpuscular Hemoglobin Concentration",
+      "aliases": ["MCHC"],
+      "category": "CBC red cell index",
+      "unit": "g/dL",
+      "description": "MCHC estimates the concentration of hemoglobin within red blood cells.",
+      "why_important": "It helps characterize red-cell color/concentration patterns and can support anemia workups.",
+      "sex_significance": {
+        "level": "low",
+        "summary": "MCHC is typically interpreted using a shared reference interval across male and female patients.",
+        "pipeline_guidance": "Use the age-group interval unless the lab report provides a sex-specific range."
+      },
+      "instructions_to_improve": {
+        "food": ["For low values, focus on iron adequacy plus B12, folate, protein, and vitamin C-supported absorption.", "For high values, do not try to self-correct with diet; confirm with repeat testing and clinical review.", "Hydration and balanced nutrition support reliable results."],
+        "exercises": ["Exercise does not directly change MCHC; stay active within symptom limits.", "Seek care before strenuous exercise if anemia symptoms are significant."],
+        "supplements": ["Use iron only when iron deficiency is likely or confirmed.", "Discuss persistent abnormal MCHC with a clinician because it can reflect lab artifacts or specific red-cell disorders."]
+      },
+      "statistics_per_group_age": {
+        "child": {"minimal_value": 32, "normal_value": 34, "maximum_value": 36},
+        "teenager": {"minimal_value": 32, "normal_value": 34, "maximum_value": 36},
+        "adult": {"minimal_value": 32, "normal_value": 34, "maximum_value": 36},
+        "elder": {"minimal_value": 32, "normal_value": 34, "maximum_value": 36}
+      },
+      "related_tests": ["mch", "mcv", "hemoglobin"],
+      "source_ids": ["uiowa_cbc_reference", "uiowa_pediatric_reference"]
+    },
+    {
+      "id": "rdw_cv",
+      "display_name": "Red Cell Distribution Width - CV",
+      "aliases": ["RDW-CV", "RDWCV", "RDW"],
+      "category": "CBC red cell index",
+      "unit": "%",
+      "description": "RDW-CV describes variation in red blood cell size as a coefficient of variation.",
+      "why_important": "Higher RDW can help identify mixed red-cell populations and may support evaluation for iron, B12, folate, recent bleeding, or recovery from anemia.",
+      "sex_significance": {
+        "level": "low",
+        "summary": "RDW-CV is usually interpreted without a major sex split, but the causes of abnormal RDW can overlap with sex-relevant conditions such as menstruation, pregnancy, and iron deficiency.",
+        "pipeline_guidance": "Use age-group statistics as fallback and interpret alongside sex-aware hemoglobin, RBC, hematocrit, and iron-related context."
+      },
+      "instructions_to_improve": {
+        "food": ["Support steady red-cell production with iron, B12, folate, protein, and adequate calories.", "Include a mix of leafy greens, legumes, fortified grains, seafood, eggs, dairy, and lean meats as appropriate.", "Address restrictive diets with clinician or dietitian support."],
+        "exercises": ["Regular activity supports general health but does not directly normalize RDW.", "Avoid overtraining if iron deficiency or anemia is suspected."],
+        "supplements": ["Consider supplements only after identifying the relevant deficiency.", "Ask about iron studies, ferritin, B12, folate, and reticulocyte count when RDW is abnormal."]
+      },
+      "statistics_per_group_age": {
+        "child": {"minimal_value": 9.0, "normal_value": 11.75, "maximum_value": 14.5},
+        "teenager": {"minimal_value": 9.0, "normal_value": 11.75, "maximum_value": 14.5},
+        "adult": {"minimal_value": 9.0, "normal_value": 11.75, "maximum_value": 14.5},
+        "elder": {"minimal_value": 9.0, "normal_value": 11.75, "maximum_value": 14.5}
+      },
+      "related_tests": ["mcv", "hemoglobin", "rdw_sd"],
+      "source_ids": ["uiowa_cbc_reference", "nih_ods_iron", "nih_ods_b12", "nih_ods_folate"]
+    },
+    {
+      "id": "rdw_sd",
+      "display_name": "Red Cell Distribution Width - SD",
+      "aliases": ["RDW-SD", "RDWSD"],
+      "category": "CBC red cell index",
+      "unit": "fL",
+      "description": "RDW-SD measures the width of the red-cell size distribution in femtoliters.",
+      "why_important": "It complements RDW-CV and MCV by showing how varied red-cell sizes are.",
+      "sex_significance": {
+        "level": "low",
+        "summary": "RDW-SD is generally not interpreted with separate male and female thresholds, but abnormal results should be considered with sex-aware red-cell markers.",
+        "pipeline_guidance": "Use age-group statistics as fallback and defer to the lab reference range if it is sex-specific."
+      },
+      "instructions_to_improve": {
+        "food": ["Follow the same red-cell nutrition pattern used for RDW-CV: iron, B12, folate, protein, and balanced calories.", "Correcting the cause of abnormal red-cell production is more important than targeting RDW-SD directly.", "Maintain hydration before routine blood draws unless instructed otherwise."],
+        "exercises": ["Regular moderate activity is reasonable when symptoms allow.", "Avoid intense training until unexplained anemia, dizziness, or shortness of breath is reviewed."],
+        "supplements": ["Supplement only for documented or likely deficiency.", "Discuss persistent abnormalities with a clinician, especially when hemoglobin or MCV is also abnormal."]
+      },
+      "statistics_per_group_age": {
+        "child": {"minimal_value": 35.1, "normal_value": 40.75, "maximum_value": 46.3},
+        "teenager": {"minimal_value": 35.1, "normal_value": 40.75, "maximum_value": 46.3},
+        "adult": {"minimal_value": 35.1, "normal_value": 40.75, "maximum_value": 46.3},
+        "elder": {"minimal_value": 35.1, "normal_value": 40.75, "maximum_value": 46.3}
+      },
+      "related_tests": ["mcv", "rdw_cv", "hemoglobin"],
+      "source_ids": ["uiowa_cbc_reference"]
+    },
+    {
+      "id": "wbc",
+      "display_name": "White Blood Cell Count",
+      "aliases": ["WBC", "Leukocyte count", "White cell count"],
+      "category": "CBC white cell marker",
+      "unit": "10^3/uL",
+      "description": "WBC count measures the total number of white blood cells in blood.",
+      "why_important": "White blood cells are central to immune defense; high or low counts can reflect infection, inflammation, medication effects, immune disorders, marrow conditions, or treatment effects.",
+      "sex_significance": {
+        "level": "low",
+        "summary": "Common adult WBC reference intervals are often the same for male and female patients. Pregnancy and some medications can change interpretation.",
+        "pipeline_guidance": "Use the age-group interval unless the lab report gives a sex- or pregnancy-specific range."
+      },
+      "instructions_to_improve": {
+        "food": ["There is no food that reliably corrects WBC count by itself; prioritize adequate calories, protein, fruits, vegetables, and hydration.", "Food safety matters if WBC is very low or immune suppression is present; ask a clinician about precautions.", "Limit heavy alcohol intake because it may impair immune and marrow function."],
+        "exercises": ["Follow general activity guidelines when well; rest during fever or acute infection.", "Avoid strenuous exercise during significant illness or very abnormal counts until medically reviewed."],
+        "supplements": ["Do not use immune-boosting supplements as a substitute for evaluation.", "Review medications and supplements with a clinician if WBC is abnormal."]
+      },
+      "statistics_per_group_age": {
+        "child": {"minimal_value": 5.5, "normal_value": 11.0, "maximum_value": 17.0},
+        "teenager": {"minimal_value": 4.5, "normal_value": 8.25, "maximum_value": 11.0},
+        "adult": {"minimal_value": 3.7, "normal_value": 7.6, "maximum_value": 10.5},
+        "elder": {"minimal_value": 3.7, "normal_value": 7.6, "maximum_value": 10.5}
+      },
+      "related_tests": ["neu_percent", "lym_percent", "mon_percent", "eos_percent", "bas_percent", "lym_absolute", "gra_absolute"],
+      "source_ids": ["medlineplus_cbc", "medlineplus_differential", "uiowa_cbc_reference", "uiowa_pediatric_reference"]
+    },
+    {
+      "id": "neu_percent",
+      "display_name": "Neutrophils Percent",
+      "aliases": ["NEU%", "Neutrophil %", "Neutrophils"],
+      "category": "CBC differential",
+      "unit": "%",
+      "description": "Neutrophil percentage is the share of white blood cells that are neutrophils, the most common WBC type and a major defense against infection.",
+      "why_important": "It helps interpret infection, inflammation, stress responses, medication effects, and marrow function, especially when paired with absolute neutrophil count.",
+      "sex_significance": {
+        "level": "low",
+        "summary": "Neutrophil percentage is usually interpreted without separate male and female ranges. Pregnancy, acute stress, and medications can affect values.",
+        "pipeline_guidance": "Use the age-group interval and prioritize the lab-provided range if pregnancy or other sex-specific context is documented."
+      },
+      "instructions_to_improve": {
+        "food": ["Support immune health with adequate protein, fruits, vegetables, whole grains, and hydration.", "There is no diet that directly normalizes neutrophil percentage; treat the cause.", "Practice food safety if a clinician says neutrophils are dangerously low."],
+        "exercises": ["Rest during acute infection or fever.", "Resume moderate activity gradually after illness; intense exercise can transiently shift white-cell patterns."],
+        "supplements": ["Avoid self-treating abnormal neutrophils with supplements.", "Discuss medication effects, infections, and need for repeat CBC or absolute neutrophil count with a clinician."]
+      },
+      "statistics_per_group_age": {
+        "child": {"minimal_value": 40, "normal_value": 50, "maximum_value": 60},
+        "teenager": {"minimal_value": 40, "normal_value": 50, "maximum_value": 60},
+        "adult": {"minimal_value": 40, "normal_value": 50, "maximum_value": 60},
+        "elder": {"minimal_value": 40, "normal_value": 50, "maximum_value": 60}
+      },
+      "related_tests": ["wbc", "gra_absolute"],
+      "source_ids": ["medlineplus_differential", "medlineplus_differential_encyclopedia"]
+    },
+    {
+      "id": "lym_percent",
+      "display_name": "Lymphocytes Percent",
+      "aliases": ["LYM%", "Lymphocyte %", "Lymphocytes"],
+      "category": "CBC differential",
+      "unit": "%",
+      "description": "Lymphocyte percentage is the share of white blood cells that are lymphocytes, including B cells and T cells.",
+      "why_important": "It helps evaluate immune patterns such as viral infections, chronic inflammation, immune suppression, and some blood disorders.",
+      "sex_significance": {
+        "level": "low",
+        "summary": "Lymphocyte percentage is generally interpreted with shared reference intervals across sex categories.",
+        "pipeline_guidance": "Use the age-group interval unless the source report provides a sex-specific or pregnancy-specific range."
+      },
+      "instructions_to_improve": {
+        "food": ["Maintain adequate protein, micronutrients, and calories to support immune cell production.", "Use a varied dietary pattern rather than targeting lymphocyte percentage directly.", "Seek evaluation for persistent abnormal values instead of relying on diet alone."],
+        "exercises": ["Moderate regular activity supports immune resilience.", "Avoid heavy training during acute illness or unexplained low counts."],
+        "supplements": ["Do not use supplements to force lymphocyte changes.", "Discuss abnormal lymphocyte percentage with a clinician, especially if absolute lymphocyte count is also abnormal."]
+      },
+      "statistics_per_group_age": {
+        "child": {"minimal_value": 20, "normal_value": 30, "maximum_value": 40},
+        "teenager": {"minimal_value": 20, "normal_value": 30, "maximum_value": 40},
+        "adult": {"minimal_value": 20, "normal_value": 30, "maximum_value": 40},
+        "elder": {"minimal_value": 20, "normal_value": 30, "maximum_value": 40}
+      },
+      "related_tests": ["wbc", "lym_absolute"],
+      "source_ids": ["medlineplus_differential", "medlineplus_differential_encyclopedia"]
+    },
+    {
+      "id": "mon_percent",
+      "display_name": "Monocytes Percent",
+      "aliases": ["MON%", "Monocyte %", "Monocytes"],
+      "category": "CBC differential",
+      "unit": "%",
+      "description": "Monocyte percentage is the share of white blood cells that are monocytes, immune cells involved in clearing germs and dead cells and coordinating immune response.",
+      "why_important": "It can support evaluation of infections, chronic inflammation, recovery from infection, and some blood or marrow disorders.",
+      "sex_significance": {
+        "level": "low",
+        "summary": "Monocyte percentage is usually not split by sex in routine CBC differential interpretation.",
+        "pipeline_guidance": "Use the age-group interval unless the lab report gives a sex-specific range."
+      },
+      "instructions_to_improve": {
+        "food": ["Eat enough protein and a varied diet to support immune function.", "No specific food reliably lowers or raises monocyte percentage.", "Persistent abnormalities should prompt review for infection, inflammation, medications, or other causes."],
+        "exercises": ["Use regular moderate exercise for general immune and metabolic health.", "Rest when acutely ill or febrile."],
+        "supplements": ["Avoid immune supplements as a replacement for medical evaluation.", "Review supplement and medication use if monocytes are persistently abnormal."]
+      },
+      "statistics_per_group_age": {
+        "child": {"minimal_value": 2, "normal_value": 5, "maximum_value": 8},
+        "teenager": {"minimal_value": 2, "normal_value": 5, "maximum_value": 8},
+        "adult": {"minimal_value": 2, "normal_value": 5, "maximum_value": 8},
+        "elder": {"minimal_value": 2, "normal_value": 5, "maximum_value": 8}
+      },
+      "related_tests": ["wbc"],
+      "source_ids": ["medlineplus_differential", "medlineplus_differential_encyclopedia"]
+    },
+    {
+      "id": "eos_percent",
+      "display_name": "Eosinophils Percent",
+      "aliases": ["EOS%", "Eosinophil %", "Eosinophils"],
+      "category": "CBC differential",
+      "unit": "%",
+      "description": "Eosinophil percentage is the share of white blood cells that are eosinophils, cells involved in allergies, asthma-related inflammation, and parasite defense.",
+      "why_important": "It can point toward allergic disease, asthma activity, drug reactions, parasitic infection, or inflammatory conditions when interpreted with symptoms.",
+      "sex_significance": {
+        "level": "low",
+        "summary": "Eosinophil percentage is typically interpreted without separate male and female thresholds.",
+        "pipeline_guidance": "Use the age-group interval unless the report provides a sex-specific range."
+      },
+      "instructions_to_improve": {
+        "food": ["No food directly normalizes eosinophils; identify allergies or triggers when clinically relevant.", "Maintain an anti-inflammatory dietary pattern with fruits, vegetables, whole grains, and adequate protein.", "Avoid foods only when a true allergy or clinician-guided elimination plan exists."],
+        "exercises": ["Exercise according to tolerance; people with asthma symptoms should follow their asthma action plan.", "Avoid exercising through wheezing, severe allergy symptoms, or acute illness."],
+        "supplements": ["Do not self-treat elevated eosinophils with supplements.", "Discuss allergy, asthma, parasite exposure, and medication review with a clinician."]
+      },
+      "statistics_per_group_age": {
+        "child": {"minimal_value": 1, "normal_value": 2.5, "maximum_value": 4},
+        "teenager": {"minimal_value": 1, "normal_value": 2.5, "maximum_value": 4},
+        "adult": {"minimal_value": 1, "normal_value": 2.5, "maximum_value": 4},
+        "elder": {"minimal_value": 1, "normal_value": 2.5, "maximum_value": 4}
+      },
+      "related_tests": ["wbc", "bas_percent"],
+      "source_ids": ["medlineplus_differential", "medlineplus_differential_encyclopedia"]
+    },
+    {
+      "id": "bas_percent",
+      "display_name": "Basophils Percent",
+      "aliases": ["BAS%", "Basophil %", "Basophils"],
+      "category": "CBC differential",
+      "unit": "%",
+      "description": "Basophil percentage is the share of white blood cells that are basophils, cells that release mediators during allergic and asthma-related reactions.",
+      "why_important": "Basophils are usually a small fraction of WBCs; persistent elevation can be relevant in allergy, inflammation, or some marrow disorders.",
+      "sex_significance": {
+        "level": "low",
+        "summary": "Basophil percentage is typically interpreted without separate male and female thresholds.",
+        "pipeline_guidance": "Use the age-group interval unless the lab report provides a sex-specific range."
+      },
+      "instructions_to_improve": {
+        "food": ["No diet directly targets basophils.", "If allergies are relevant, avoid confirmed triggers and maintain balanced nutrition.", "Seek medical review for persistent elevation rather than self-treating."],
+        "exercises": ["Exercise as tolerated; avoid exposure-triggered activity if asthma or allergic symptoms are active.", "Rest during acute allergic or inflammatory episodes if symptoms are significant."],
+        "supplements": ["Avoid supplement-only management for abnormal basophils.", "Review medications, allergy history, and repeat testing with a clinician when needed."]
+      },
+      "statistics_per_group_age": {
+        "child": {"minimal_value": 0.5, "normal_value": 0.75, "maximum_value": 1},
+        "teenager": {"minimal_value": 0.5, "normal_value": 0.75, "maximum_value": 1},
+        "adult": {"minimal_value": 0.5, "normal_value": 0.75, "maximum_value": 1},
+        "elder": {"minimal_value": 0.5, "normal_value": 0.75, "maximum_value": 1}
+      },
+      "related_tests": ["wbc", "eos_percent"],
+      "source_ids": ["medlineplus_differential", "medlineplus_differential_encyclopedia"]
+    },
+    {
+      "id": "lym_absolute",
+      "display_name": "Absolute Lymphocyte Count",
+      "aliases": ["LYM#", "Lymphocyte #", "Absolute lymphocytes", "ALC"],
+      "category": "CBC differential absolute count",
+      "unit": "10^3/uL",
+      "description": "Absolute lymphocyte count is the number of lymphocytes in a volume of blood.",
+      "why_important": "It is often more clinically useful than lymphocyte percentage because percentages can shift when other WBC types rise or fall.",
+      "sex_significance": {
+        "level": "low",
+        "summary": "Absolute lymphocyte count is generally interpreted with shared male and female reference intervals.",
+        "pipeline_guidance": "Use the age-group interval unless the report gives a sex-specific range."
+      },
+      "instructions_to_improve": {
+        "food": ["Support immune cell production with adequate calories, protein, and micronutrient-rich foods.", "Food cannot reliably correct abnormal absolute lymphocytes by itself.", "If immunosuppressed, ask about food safety guidance."],
+        "exercises": ["Use moderate regular activity when well.", "Avoid intense exercise during acute infection, fever, or severe fatigue."],
+        "supplements": ["Do not use immune supplements to self-correct lymphocyte count.", "Discuss persistent low or high ALC with a clinician, especially with infections, weight loss, night sweats, or medication changes."]
+      },
+      "statistics_per_group_age": {
+        "child": {"minimal_value": 2.0, "normal_value": 5.75, "maximum_value": 9.5},
+        "teenager": {"minimal_value": 1.25, "normal_value": 3.63, "maximum_value": 7.0},
+        "adult": {"minimal_value": 0.875, "normal_value": 2.19, "maximum_value": 3.3},
+        "elder": {"minimal_value": 0.875, "normal_value": 2.19, "maximum_value": 3.3}
+      },
+      "related_tests": ["lym_percent", "wbc"],
+      "source_ids": ["uiowa_pediatric_reference", "uchicago_cbc_diff", "medlineplus_differential"]
+    },
+    {
+      "id": "gra_absolute",
+      "display_name": "Absolute Granulocyte Count",
+      "aliases": ["GRA#", "Granulocyte #", "Absolute granulocytes", "ANC when neutrophil-dominant"],
+      "category": "CBC differential absolute count",
+      "unit": "10^3/uL",
+      "description": "GRA# is a lab-reported absolute granulocyte count. Granulocytes include neutrophils, eosinophils, and basophils; in many CBC reports this value is mainly driven by neutrophils.",
+      "why_important": "It helps summarize infection-fighting granulocytes and may approximate neutrophil burden, but exact meaning depends on the analyzer and lab report.",
+      "sex_significance": {
+        "level": "low",
+        "summary": "Absolute granulocyte or neutrophil-dominant counts are usually interpreted without separate male and female thresholds. Pregnancy and acute stress can affect granulocyte counts.",
+        "pipeline_guidance": "Use the age-group interval and lab-provided reference range; do not infer sex-specific status unless the source range provides it."
+      },
+      "instructions_to_improve": {
+        "food": ["No food directly normalizes granulocyte count; support immune health with balanced nutrition and adequate protein.", "If counts are very low, ask about infection prevention and food safety precautions.", "Hydration and rest during illness can support recovery but do not replace evaluation."],
+        "exercises": ["Rest during fever or acute infection.", "Resume regular moderate activity after recovery and medical clearance if counts are significantly abnormal."],
+        "supplements": ["Avoid self-treatment with immune supplements.", "Ask whether the lab means granulocytes broadly or absolute neutrophil count, and whether repeat CBC/differential is needed."]
+      },
+      "statistics_per_group_age": {
+        "child": {"minimal_value": 1.5, "normal_value": 5.0, "maximum_value": 8.5},
+        "teenager": {"minimal_value": 1.7, "normal_value": 4.6, "maximum_value": 7.5},
+        "adult": {"minimal_value": 1.12, "normal_value": 3.36, "maximum_value": 6.72},
+        "elder": {"minimal_value": 1.12, "normal_value": 3.36, "maximum_value": 6.72}
+      },
+      "related_tests": ["neu_percent", "wbc", "eos_percent", "bas_percent"],
+      "source_ids": ["uiowa_pediatric_reference", "uchicago_cbc_diff", "medlineplus_differential"]
+    },
+    {
+      "id": "plt",
+      "display_name": "Platelet Count",
+      "aliases": ["PLT", "Platelets", "Thrombocytes"],
+      "category": "CBC platelet marker",
+      "unit": "10^3/uL",
+      "description": "Platelet count measures small blood cell fragments that help form clots and stop bleeding.",
+      "why_important": "Low platelets can increase bleeding risk; high platelets can occur with inflammation, iron deficiency, recovery from bleeding, or marrow disorders and may affect clotting risk.",
+      "sex_significance": {
+        "level": "low",
+        "summary": "Many adult CBC references use the same platelet interval for male and female patients. Pregnancy, menstruation-related iron deficiency, inflammation, and medications can affect interpretation.",
+        "pipeline_guidance": "Use the age-group interval unless the lab report provides a sex- or pregnancy-specific range. Surface pregnancy and bleeding-risk caveats when relevant."
+      },
+      "instructions_to_improve": {
+        "food": ["Eat a balanced pattern with adequate protein, iron, folate, and B12 to support marrow production.", "If platelets are high with low iron markers, iron-rich foods may matter, but the cause should be confirmed.", "Avoid heavy alcohol intake because it can lower platelet production."],
+        "exercises": ["If platelets are very low, avoid contact sports or high-impact activities until cleared.", "Use regular moderate activity when platelet count and symptoms allow."],
+        "supplements": ["Avoid aspirin-like or blood-thinning supplements unless clinician-approved, especially with low platelets or bleeding symptoms.", "Discuss iron, B12, or folate only when deficiency is suspected or confirmed."]
+      },
+      "statistics_per_group_age": {
+        "child": {"minimal_value": 155, "normal_value": 342.5, "maximum_value": 500},
+        "teenager": {"minimal_value": 140, "normal_value": 270, "maximum_value": 400},
+        "adult": {"minimal_value": 150, "normal_value": 275, "maximum_value": 400},
+        "elder": {"minimal_value": 150, "normal_value": 275, "maximum_value": 400}
+      },
+      "related_tests": ["wbc", "hemoglobin"],
+      "source_ids": ["medlineplus_cbc", "uiowa_cbc_reference", "seattle_childrens_platelet", "nih_ods_iron", "nih_ods_b12", "nih_ods_folate"]
+    },
+    {
+      "id": "esr",
+      "display_name": "Erythrocyte Sedimentation Rate",
+      "aliases": ["ESR", "Sed rate", "Westergren ESR"],
+      "category": "Inflammation marker",
+      "unit": "mm/hr",
+      "description": "ESR measures how quickly red blood cells settle in a tube over one hour.",
+      "why_important": "A faster sedimentation rate can be a nonspecific sign of inflammation, infection, autoimmune disease, some cancers, or blood disorders. ESR alone does not diagnose the cause.",
+      "sex_significance": {
+        "level": "high",
+        "summary": "ESR reference thresholds commonly differ by sex and increase with age; female thresholds are often higher than male thresholds.",
+        "pipeline_guidance": "Use sex_specific_statistics_per_group_age when sex is known. ESR is nonspecific, so the UI should avoid diagnosis and should mention that anemia, pregnancy, age, and other conditions can affect results."
+      },
+      "sex_specific_statistics_per_group_age": {
+        "child": {
+          "male": {"minimal_value": 0, "normal_value": 6.5, "maximum_value": 13},
+          "female": {"minimal_value": 0, "normal_value": 6.5, "maximum_value": 13},
+          "unknown": {"minimal_value": 0, "normal_value": 6.5, "maximum_value": 13}
+        },
+        "teenager": {
+          "male": {"minimal_value": 0, "normal_value": 7.5, "maximum_value": 15},
+          "female": {"minimal_value": 0, "normal_value": 10, "maximum_value": 20},
+          "unknown": {"minimal_value": 0, "normal_value": 10, "maximum_value": 20}
+        },
+        "adult": {
+          "male": {"minimal_value": 0, "normal_value": 7.5, "maximum_value": 15},
+          "female": {"minimal_value": 0, "normal_value": 10, "maximum_value": 20},
+          "unknown": {"minimal_value": 0, "normal_value": 10, "maximum_value": 20}
+        },
+        "elder": {
+          "male": {"minimal_value": 0, "normal_value": 10, "maximum_value": 20},
+          "female": {"minimal_value": 0, "normal_value": 15, "maximum_value": 30},
+          "unknown": {"minimal_value": 0, "normal_value": 15, "maximum_value": 30}
+        }
+      },
+      "instructions_to_improve": {
+        "food": ["Use a balanced dietary pattern emphasizing vegetables, fruits, whole grains, legumes, nuts, fish, and adequate protein.", "Reduce heavy alcohol intake and ultra-processed foods if they are major parts of the diet.", "Address the medical cause of inflammation; diet alone may not normalize ESR."],
+        "exercises": ["Regular moderate activity can support inflammatory and cardiovascular health when appropriate.", "Avoid strenuous exercise during acute illness, fever, or unexplained inflammatory symptoms."],
+        "supplements": ["Do not use supplements to hide or self-treat unexplained inflammation.", "Discuss whether CRP, repeat ESR, or condition-specific testing is appropriate; review all supplements and medications because some can affect results."]
+      },
+      "statistics_per_group_age": {
+        "child": {"minimal_value": 0, "normal_value": 5, "maximum_value": 10},
+        "teenager": {"minimal_value": 0, "normal_value": 10, "maximum_value": 20},
+        "adult": {"minimal_value": 0, "normal_value": 10, "maximum_value": 20},
+        "elder": {"minimal_value": 0, "normal_value": 15, "maximum_value": 30}
+      },
+      "related_tests": ["wbc", "hemoglobin"],
+      "source_ids": ["medlineplus_esr", "seattle_childrens_esr", "uchicago_esr_reference", "cleveland_clinic_esr"]
+    }
+  ]
+}
