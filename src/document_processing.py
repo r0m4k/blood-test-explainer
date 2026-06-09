@@ -27,7 +27,7 @@ def validate_upload(path: str) -> Path:
     return file_path
 
 
-def document_to_payload_parts(path: str, max_pages: int = 3) -> list[dict]:
+def document_to_payload_parts(path: str, max_pages: int | None = None) -> list[dict]:
     file_path = validate_upload(path)
     extension = file_path.suffix.lower()
 
@@ -43,13 +43,13 @@ def document_to_payload_parts(path: str, max_pages: int = 3) -> list[dict]:
     raise ValueError(f"Unsupported file type `{extension}`.")
 
 
-def _pdf_to_image_parts(file_path: Path, max_pages: int) -> list[dict]:
+def _pdf_to_image_parts(file_path: Path, max_pages: int | None) -> list[dict]:
     parts: list[dict] = []
     with fitz.open(file_path) as document:
         if document.page_count == 0:
             raise ValueError("The uploaded PDF does not contain any pages.")
 
-        pages_to_read = min(document.page_count, max_pages)
+        pages_to_read = document.page_count if max_pages is None else min(document.page_count, max_pages)
         for page_index in range(pages_to_read):
             page = document.load_page(page_index)
             pixmap = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)

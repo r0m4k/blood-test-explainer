@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import json
 import os
 from html import escape
 from typing import Any
@@ -8,87 +7,43 @@ from typing import Any
 import gradio as gr
 
 from src.local_env import load_local_env
-from src.openbmb_client import DEFAULT_API_URL, DEFAULT_MODEL, OpenBMBExtractor
+from src.openbmb_client import OpenBMBExtractor
 
 
 load_local_env()
 
-TABLE_HEADERS = [
-    "marker",
-    "value",
-    "unit",
-    "reference_range",
-    "status",
-    "confidence",
-    "source_text",
-]
-
-
 def extract_lab_values(
     uploaded_file: str | None,
-    api_url: str,
-    model: str,
     api_key_override: str,
-    max_pages: int,
-) -> tuple[list[list[Any]], str, str, str, str, Any]:
+) -> tuple[str, str, Any]:
     if not uploaded_file:
         return (
-            [],
             _status_html("Waiting for a document", "Upload a lab report to begin extraction."),
-            "{}",
-            "",
             empty_report_html("No document uploaded", "Choose a file first, then run extraction again."),
             gr.update(visible=True),
         )
 
     extractor = OpenBMBExtractor(
-        api_url=api_url,
-        model=model,
         api_key=(api_key_override or "").strip() or None,
     )
 
     try:
-        result = extractor.extract(uploaded_file, max_pages=int(max_pages))
+        result = extractor.extract(uploaded_file)
     except Exception as error:
         return (
-            [],
             _status_html("Extraction failed", str(error), tone="danger"),
-            "{}",
-            "",
             empty_report_html("Extraction failed", "The model response could not be converted into a report."),
             gr.update(visible=True),
         )
-
-    table_rows = [[test.get(header) for header in TABLE_HEADERS] for test in result.tests]
-    structured_json = json.dumps(
-        {"tests": result.tests, "notes": result.notes, "request": result.request_summary},
-        indent=2,
-        ensure_ascii=False,
-    )
 
     status_text = f"Extracted {len(result.tests)} lab values."
     if result.notes:
         status_text += " Notes: " + " ".join(result.notes[:3])
 
     return (
-        table_rows,
         _status_html("Extraction complete", status_text),
-        structured_json,
-        result.raw_response,
         report_html(result.tests, result.notes),
         gr.update(visible=True),
-    )
-
-
-def api_status() -> str:
-    configured = bool(os.getenv("OPENBMB_API_KEY"))
-    api_url = os.getenv("OPENBMB_API_URL") or DEFAULT_API_URL
-    model = os.getenv("OPENBMB_MODEL") or DEFAULT_MODEL
-
-    if configured:
-        return f"<strong>OpenBMB key detected.</strong><span>{escape(model)} · {escape(api_url)}</span>"
-    return (
-        "<strong>OpenBMB key missing.</strong><span>Set <code>OPENBMB_API_KEY</code> locally or as a Space secret.</span>"
     )
 
 
@@ -514,7 +469,14 @@ gradio-app,
 }
 
 .bte-title {
-  padding: 26px 12px 18px;
+  margin: 0 12px 18px;
+  padding: 26px 24px 22px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(360px, 0.46fr);
+  gap: 32px;
+  align-items: center;
+  border-radius: 0;
+  background: #ffffff;
 }
 
 .bte-title h1,
@@ -531,6 +493,46 @@ gradio-app,
   font-size: 16px;
   max-width: 820px;
   margin: 0;
+}
+
+.bte-title-copy {
+  min-width: 0;
+}
+
+.bte-title > div,
+.bte-title > div > div,
+.bte-title .column,
+.bte-title .block,
+.bte-title .form {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+}
+
+.bte-api-key-panel {
+  width: 100%;
+  max-width: 560px;
+  justify-self: end;
+  margin: 0;
+  border: 1px solid var(--bte-line);
+  border-radius: 18px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.86);
+  box-shadow: none;
+}
+
+.bte-api-key-panel > div,
+.bte-api-key-panel > div > div {
+  background: transparent !important;
+}
+
+.bte-api-key-panel .block {
+  border: 0 !important;
+  background: transparent !important;
+}
+
+.bte-api-key-panel input {
+  min-height: 44px !important;
 }
 
 .bte-hero-grid {
@@ -1446,7 +1448,9 @@ button.bte-action *,
   }
 
   .bte-title {
-    padding: 22px 4px 16px;
+    padding: 22px 16px 18px;
+    grid-template-columns: 1fr;
+    gap: 18px;
   }
 
   .bte-title h1,
@@ -1459,6 +1463,12 @@ button.bte-action *,
     font-size: 15px;
     max-width: 340px !important;
     overflow-wrap: anywhere;
+  }
+
+  .bte-api-key-panel {
+    margin: 0;
+    max-width: 100%;
+    justify-self: stretch;
   }
 
   .bte-shell {
@@ -1575,15 +1585,25 @@ button.bte-action *,
 
 
 with gr.Blocks(title="Blood Test Explainer") as demo:
-    gr.HTML(
-        """
-        <section class="bte-title">
-          <p class="bte-kicker">Clinical clarity from raw documents</p>
-          <h1>Blood Test Explainer</h1>
-          <p>Upload a lab report and turn dense medical paperwork into a polished extraction report with raw markers, values, units, reference ranges, and confidence signals.</p>
-        </section>
-        """
-    )
+    with gr.Row(equal_height=True, elem_classes=["bte-title"]):
+        with gr.Column(scale=6, min_width=420, elem_classes=["bte-title-copy"]):
+            gr.HTML(
+                """
+                <div>
+                  <p class="bte-kicker">Clinical clarity from raw documents</p>
+                  <h1>Blood Test Explainer</h1>
+                  <p>Upload a lab report and turn dense medical paperwork into a polished extraction report with raw markers, values, units, reference ranges, and confidence signals.</p>
+                </div>
+                """
+            )
+        with gr.Column(scale=4, min_width=360):
+            with gr.Group(elem_classes=["bte-api-key-panel"]):
+                api_key_override = gr.Textbox(
+                    label="OpenBMB API key",
+                    type="password",
+                    placeholder="Paste your OpenBMB API key",
+                    interactive=True,
+                )
 
     with gr.Row(equal_height=False, elem_classes=["bte-hero-grid"]):
         with gr.Column(scale=4, min_width=320):
@@ -1602,27 +1622,6 @@ with gr.Blocks(title="Blood Test Explainer") as demo:
         with gr.Column(scale=5, min_width=360):
             gr.HTML(formation_animation_html())
 
-    with gr.Accordion("Advanced extraction settings", open=False):
-        with gr.Group(elem_classes=["bte-shell", "bte-engine", "bte-engine-compact"]):
-            api_url = gr.Textbox(
-                label="OpenBMB chat completions URL",
-                value=os.getenv("OPENBMB_API_URL") or DEFAULT_API_URL,
-                interactive=True,
-            )
-            model = gr.Textbox(
-                label="Model",
-                value=os.getenv("OPENBMB_MODEL") or DEFAULT_MODEL,
-                interactive=True,
-            )
-            api_key_override = gr.Textbox(
-                label="OpenBMB API key override",
-                type="password",
-                placeholder="Optional. Paste exact token here for local testing.",
-                interactive=True,
-            )
-            max_pages = gr.Slider(1, 8, value=3, step=1, label="PDF pages to inspect")
-            gr.HTML(api_status(), elem_classes=["bte-status"])
-
     status = gr.HTML(_status_html("Ready", "Upload a lab report to create the first interactive extraction draft."))
 
     uploaded.change(
@@ -1634,22 +1633,7 @@ with gr.Blocks(title="Blood Test Explainer") as demo:
 
     gr.HTML('<div id="bte-report-anchor" class="bte-report-anchor"></div>', visible=True)
     with gr.Group(visible=False) as report_panel:
-        with gr.Tabs():
-            with gr.Tab("Report"):
-                report = gr.HTML(empty_report_html())
-            with gr.Tab("Values"):
-                results = gr.Dataframe(
-                    headers=TABLE_HEADERS,
-                    datatype=["str", "str", "str", "str", "str", "number", "str"],
-                    row_count=(0, "dynamic"),
-                    column_count=(len(TABLE_HEADERS), "fixed"),
-                    label="Extracted values",
-                    wrap=True,
-                )
-            with gr.Tab("JSON"):
-                structured_json = gr.Code(language="json", label="Normalized extraction")
-            with gr.Tab("Raw"):
-                raw_response = gr.Textbox(label="Raw model response", lines=12)
+        report = gr.HTML(empty_report_html())
 
     run_button.click(
         show_processing,
@@ -1669,8 +1653,8 @@ with gr.Blocks(title="Blood Test Explainer") as demo:
         """,
     ).then(
         extract_lab_values,
-        inputs=[uploaded, api_url, model, api_key_override, max_pages],
-        outputs=[results, status, structured_json, raw_response, report, report_panel],
+        inputs=[uploaded, api_key_override],
+        outputs=[status, report, report_panel],
         scroll_to_output=True,
         show_progress="hidden",
     )
