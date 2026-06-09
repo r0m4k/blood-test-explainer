@@ -33,6 +33,16 @@ The long-term vision is to make medical paperwork less intimidating and help peo
 
 The first version focuses only on extraction: upload a lab report and convert it into structured raw values such as marker name, value, unit, reference range, status, source snippet, and confidence.
 
+## Current Pipeline
+
+The app now runs extraction and deterministic knowledge-graph enrichment:
+
+1. The extractor reads an uploaded image, PDF, or text document and returns patient context plus raw lab values.
+2. `src.report_pipeline.build_health_report` resolves marker aliases against `kb/cbc_knowledge_graph.json`, selects age/sex-aware reference context, and merges marker explanations, importance, and food/exercise/supplement guidance.
+3. `app.py` renders the enriched report as the final health-report UI.
+
+The knowledge graph is educational context, not diagnosis. The lab-provided reference range remains the primary comparison when it is available.
+
 Local setup:
 
 ```bash
