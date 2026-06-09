@@ -11,6 +11,7 @@ reference interval, a category, and a one-line "what it measures".
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 
 
@@ -96,7 +97,22 @@ for _m in MARKERS:
 
 
 def resolve(name: str) -> Marker | None:
-    """Match an extracted marker name (canonical or alias) to a known Marker."""
+    """Match an extracted marker name (canonical or alias) to a known Marker.
+
+    Real reports print verbose names like "Packed Cell Volume (PCV)" or "Hemoglobin (HB/Hgb)".
+    We try the exact name, then the text outside the parentheses, then the abbreviation inside,
+    so both the canonical form and the lab's variant resolve to the same marker.
+    """
     if not name:
         return None
-    return _LOOKUP.get(name.strip().casefold())
+    key = name.strip().casefold()
+    if key in _LOOKUP:
+        return _LOOKUP[key]
+    m = re.search(r"\(([^)]*)\)", key)
+    if m:
+        outer = re.sub(r"\([^)]*\)", "", key).strip()
+        inner = m.group(1).strip()
+        for cand in (outer, inner):
+            if cand in _LOOKUP:
+                return _LOOKUP[cand]
+    return None
