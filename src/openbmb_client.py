@@ -75,7 +75,7 @@ class OpenBMBExtractor:
     def is_configured(self) -> bool:
         return bool(self.api_key)
 
-    def extract(self, file_path: str, max_pages: int = 3) -> ExtractionResult:
+    def extract(self, file_path: str, max_pages: int | None = None) -> ExtractionResult:
         if not self.api_key:
             raise RuntimeError(
                 "OpenBMB API key is not configured. Set OPENBMB_API_KEY locally or add it as a Hugging Face Space secret."
@@ -126,7 +126,7 @@ class OpenBMBExtractor:
                 "api_url": self.api_url,
                 "model": self.model,
                 "document_parts": len(document_parts),
-                "max_pages": max_pages,
+                "pages": "auto",
             },
         )
 
