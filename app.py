@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from html import escape
 from typing import Any
 
@@ -8,6 +9,7 @@ import gradio as gr
 
 from src.local_env import load_local_env
 from src.extraction import build_extractor
+from src.report_pipeline import build_health_report
 
 
 load_local_env()
@@ -38,13 +40,27 @@ def extract_lab_values(
             gr.update(visible=True),
         )
 
-    status_text = f"Extracted {len(result.tests)} lab values."
+    health_report = build_health_report(result)
+    summary = health_report["summary"]
+    patient = health_report["patient"]
+
+    status_text = (
+        f"Extracted {summary['total_markers']} lab values and enriched "
+        f"{summary['enriched_markers']} from the knowledge graph."
+    )
+    patient_bits = []
+    if patient.get("age"):
+        patient_bits.append(f"age {patient['age']}")
+    if patient.get("sex") and patient["sex"] != "unknown":
+        patient_bits.append(patient["sex"])
+    if patient_bits:
+        status_text += " Patient context: " + ", ".join(patient_bits) + "."
     if result.notes:
         status_text += " Notes: " + " ".join(result.notes[:3])
 
     return (
         _status_html("Extraction complete", status_text),
-        report_html(result.tests, result.notes),
+        report_html(health_report),
         gr.update(visible=True),
     )
 
@@ -60,7 +76,7 @@ def _status_html(title: str, detail: str, tone: str = "success") -> str:
 
 def show_processing() -> tuple[str, Any, str]:
     return (
-        _status_html("Reading document", "Extracting markers, values, units, ranges, and confidence signals.", tone="loading"),
+        _status_html("Reading document", "Extracting patient context and markers, then matching them to the knowledge graph.", tone="loading"),
         gr.update(visible=True),
         loading_report_html(),
     )
@@ -91,7 +107,7 @@ def selected_document_html(filename: str | None = None) -> str:
       <div>
         <p class="bte-kicker">Document loaded</p>
         <h3>{escape(filename)}</h3>
-        <p>Ready to extract markers, values, units, ranges, and confidence signals.</p>
+        <p>Ready to extract markers, patient context, values, units, ranges, and confidence signals.</p>
       </div>
     </section>
     """
@@ -122,7 +138,7 @@ def loading_report_html() -> str:
       <div class="bte-loading-copy">
         <p class="bte-kicker">Extraction in progress</p>
         <h2>Reading your test results</h2>
-        <p>The model is locating markers, values, units, reference ranges, and status flags. The full report will appear here when extraction is complete.</p>
+        <p>The model is locating patient context, markers, values, units, reference ranges, and status flags. The knowledge graph report will appear when enrichment is complete.</p>
       </div>
       <div class="bte-loading-stack" aria-hidden="true">
         <div><span></span><strong></strong></div>
@@ -346,65 +362,84 @@ def _ideal_marker_card(test: dict[str, str]) -> str:
     """
 
 
-def report_html(tests: list[dict[str, Any]], notes: list[str]) -> str:
-    total = len(tests)
-    high = _count_status(tests, "high")
-    low = _count_status(tests, "low")
-    abnormal = _count_status(tests, "abnormal")
-    normal = _count_status(tests, "normal")
-    needs_review = high + low + abnormal
+def report_html(report: dict[str, Any]) -> str:
+    markers = list(report.get("markers") or [])
+    summary = report.get("summary") or {}
+    patient = report.get("patient") or {}
 
-    cards = "\n".join(_marker_card(test) for test in tests) or _empty_marker_card()
-    notes_html = "".join(f"<li>{escape(note)}</li>" for note in notes[:6])
-    notes_block = f"<ul>{notes_html}</ul>" if notes_html else "<p>No extraction notes returned.</p>"
+    total = int(summary.get("total_markers") or len(markers))
+    final_statuses = [_final_status_for_marker(marker) for marker in markers]
+    ideal = final_statuses.count("ideal")
+    normal = final_statuses.count("normal")
+    bad = final_statuses.count("bad")
+    patient_context = _final_patient_context(patient)
+
+    left_cards = "\n".join(
+        _final_marker_card(marker) for index, marker in enumerate(markers) if index % 2 == 0
+    )
+    right_cards = "\n".join(
+        _final_marker_card(marker) for index, marker in enumerate(markers) if index % 2 == 1
+    )
+    if not left_cards and not right_cards:
+        left_cards = _empty_final_marker_card()
 
     return f"""
-    <section class="bte-report">
-      <header class="bte-report-hero">
+    <section class="bte-ideal-doc bte-final-report">
+      <header class="bte-ideal-hero">
         <div>
-          <p class="bte-kicker">Lab extraction report</p>
-          <h2>{total} markers found</h2>
-          <p>Review the extracted values before using them for interpretation. This draft is an extraction view only.</p>
-        </div>
-        <div class="bte-score">
-          <span>{needs_review}</span>
-          <small>need review</small>
+          <p class="bte-kicker">Final health report</p>
+          <h2>Final health report reference</h2>
+          <p>Generated from the uploaded lab report, matched to the knowledge graph, and enriched with age and sex context. {escape(patient_context)}</p>
         </div>
       </header>
 
-      <div class="bte-metrics">
-        {_metric("Total", total, "All extracted markers")}
-        {_metric("Review", needs_review, "High, low, or abnormal")}
-        {_metric("Normal", normal, "Marked normal")}
-        {_metric("Unknown", max(total - needs_review - normal, 0), "Needs confirmation")}
+      <input class="bte-ideal-filter" type="radio" name="bte-final-filter" id="bte-final-filter-total" checked>
+      <input class="bte-ideal-filter" type="radio" name="bte-final-filter" id="bte-final-filter-ideal">
+      <input class="bte-ideal-filter" type="radio" name="bte-final-filter" id="bte-final-filter-normal">
+      <input class="bte-ideal-filter" type="radio" name="bte-final-filter" id="bte-final-filter-bad">
+
+      <div class="bte-ideal-stats">
+        <label class="bte-ideal-stat bte-ideal-stat--total" for="bte-final-filter-total">
+          <span>{total}</span>
+          <strong>Total tests</strong>
+        </label>
+        <label class="bte-ideal-stat bte-ideal-stat--ideal" for="bte-final-filter-ideal">
+          <span>{ideal}</span>
+          <strong>Ideal</strong>
+        </label>
+        <label class="bte-ideal-stat bte-ideal-stat--normal" for="bte-final-filter-normal">
+          <span>{normal}</span>
+          <strong>Normal</strong>
+        </label>
+        <label class="bte-ideal-stat bte-ideal-stat--bad" for="bte-final-filter-bad">
+          <span>{bad}</span>
+          <strong>Bad</strong>
+        </label>
       </div>
 
-      <div class="bte-status-strip">
-        {_pill("High", high, "high")}
-        {_pill("Low", low, "low")}
-        {_pill("Abnormal", abnormal, "abnormal")}
-        {_pill("Normal", normal, "normal")}
-      </div>
-
-      <div class="bte-report-grid">
-        <section class="bte-marker-list">
-          {cards}
-        </section>
-        <aside class="bte-report-aside">
-          <h3>Extraction notes</h3>
-          {notes_block}
-          <div class="bte-disclaimer">
-            <strong>Draft only</strong>
-            <span>These are raw extracted values, not medical advice. Confirm values against the original document.</span>
-          </div>
-        </aside>
+      <div class="bte-ideal-grid">
+        <div class="bte-ideal-column">
+          {left_cards}
+        </div>
+        <div class="bte-ideal-column">
+          {right_cards}
+        </div>
       </div>
     </section>
     """
 
 
-def _count_status(tests: list[dict[str, Any]], status: str) -> int:
-    return sum(1 for test in tests if str(test.get("status") or "").lower() == status)
+def _patient_context_html(patient: dict[str, Any]) -> str:
+    age = _text(patient.get("age"), "Not extracted")
+    age_group = _text(patient.get("age_group"), "adult")
+    sex = _text(patient.get("sex"), "unknown")
+    return f"""
+    <dl class="bte-patient-context">
+      <div><dt>Age</dt><dd>{escape(age)}</dd></div>
+      <div><dt>Age group</dt><dd>{escape(age_group.title())}</dd></div>
+      <div><dt>Sex</dt><dd>{escape(sex.title())}</dd></div>
+    </dl>
+    """
 
 
 def _metric(label: str, value: int, caption: str) -> str:
@@ -422,13 +457,25 @@ def _pill(label: str, value: int, tone: str) -> str:
 
 
 def _marker_card(test: dict[str, Any]) -> str:
-    marker = _text(test.get("marker"), "Unknown marker")
+    marker = _preferred_marker_label(test)
+    raw_name = _text(test.get("raw_name"), marker)
     value = _text(test.get("value"), "-")
     unit = _text(test.get("unit"), "")
-    reference = _text(test.get("reference_range"), "Reference range not extracted")
+    reference = _reference_label(test)
     status = _text(test.get("status"), "unknown").lower()
-    source = _text(test.get("source_text"), "No source snippet returned.")
     confidence = _confidence_percent(test.get("confidence"))
+    comparison = test.get("comparison") or {}
+    range_position = escape(str(comparison.get("range_position", 50)))
+    knowledge = test.get("knowledge") or {}
+    source = _text(test.get("source_text"), "No source snippet returned.")
+    description = _text(knowledge.get("description"), "No knowledge graph description available for this marker.")
+    why = _text(knowledge.get("why_important"), "No knowledge graph importance note available for this marker.")
+    instructions = knowledge.get("instructions_to_improve") or {}
+    sex_context = knowledge.get("sex_significance") or {}
+    sex_summary = _text(sex_context.get("summary"), "No major sex-specific interpretation note is stored for this marker.")
+    stats_text = _statistics_text(test)
+    derived = _text(test.get("derived_status"), "unknown")
+    extracted = _text(test.get("extracted_status"), "unknown")
 
     return f"""
     <details class="bte-marker bte-marker--{escape(status)}" open>
@@ -444,14 +491,256 @@ def _marker_card(test: dict[str, Any]) -> str:
         <span class="bte-marker-status">{escape(status.title())}</span>
       </summary>
       <div class="bte-marker-body">
-        <div>
-          <span>Confidence</span>
+        <div class="bte-marker-evidence">
+          <span>Extraction confidence</span>
           <div class="bte-confidence"><i style="width: {confidence}%"></i></div>
           <small>{confidence}%</small>
+          <span>Raw marker</span>
+          <small>{escape(raw_name)}</small>
+          <span>Status check</span>
+          <small>Extracted: {escape(extracted.title())}. Calculated: {escape(derived.title())}.</small>
+          <blockquote>{escape(source)}</blockquote>
         </div>
-        <blockquote>{escape(source)}</blockquote>
+        <div class="bte-marker-insights">
+          <div class="bte-range-scale bte-range-scale--report" style="--value-position: {range_position}%; --value-position-number: {range_position}">
+            <div class="bte-range-value">
+              <strong>{escape(value)}</strong>
+              <small>{escape(unit)}</small>
+            </div>
+            <div class="bte-range-track" aria-hidden="true">
+              <span>Low</span>
+              <span>Reference</span>
+              <span>High</span>
+            </div>
+          </div>
+          <div class="bte-insight-grid">
+            {_insight_block("Measures", description)}
+            {_insight_block("Why it matters", why)}
+            {_insight_block("Selected range", stats_text)}
+            {_insight_block("Sex context", sex_summary)}
+          </div>
+          <div class="bte-guidance">
+            {_guidance_column("Food", instructions.get("food"))}
+            {_guidance_column("Exercise", instructions.get("exercises"))}
+            {_guidance_column("Supplements", instructions.get("supplements"))}
+          </div>
+        </div>
       </div>
     </details>
+    """
+
+
+def _final_marker_card(test: dict[str, Any]) -> str:
+    marker = _preferred_marker_label(test)
+    value = _text(test.get("value"), "-")
+    unit = _text(test.get("unit"), "")
+    status = _final_status_for_marker(test)
+    range_position = escape(str(_final_range_position(test)))
+    knowledge = test.get("knowledge") or {}
+    instructions = knowledge.get("instructions_to_improve") or {}
+    description = _text(knowledge.get("description"), "No knowledge graph description available for this marker.")
+    why = _text(knowledge.get("why_important"), "No knowledge graph importance note available for this marker.")
+    improve = _final_improvement_text(instructions)
+    context = _final_context_text(test)
+
+    return f"""
+    <article class="bte-ideal-marker bte-ideal-marker--{escape(status)}">
+      <div class="bte-ideal-marker-head">
+        <div class="bte-ideal-title-line">
+          <h3>{escape(marker)}</h3>
+          <span class="bte-ideal-status">{escape(status.title())}</span>
+        </div>
+        <div class="bte-range-scale" style="--value-position: {range_position}%; --value-position-number: {range_position}">
+          <div class="bte-range-value">
+            <strong>{escape(value)}</strong>
+            <small>{escape(unit)}</small>
+          </div>
+          <div class="bte-range-track" aria-hidden="true">
+            <span>Bad</span>
+            <span>Normal</span>
+            <span>Good</span>
+          </div>
+        </div>
+      </div>
+      <div class="bte-ideal-marker-body">
+        <div>
+          <span>Measures</span>
+          <p>{escape(description)}</p>
+        </div>
+        <div>
+          <span>Why it matters</span>
+          <p>{escape(why)}</p>
+        </div>
+        <div>
+          <span>How to improve</span>
+          <p>{escape(improve)}</p>
+        </div>
+        <div>
+          <span>Reference context</span>
+          <p>{escape(context)}</p>
+        </div>
+      </div>
+    </article>
+    """
+
+
+def _final_status_for_marker(marker: dict[str, Any]) -> str:
+    quality = _final_quality(marker)
+    if quality is None:
+        status = _text(marker.get("status"), "unknown").lower()
+        if status in {"low", "high", "abnormal"}:
+            return "bad"
+        return "normal"
+    return quality["status"]
+
+
+def _preferred_marker_label(marker: dict[str, Any]) -> str:
+    canonical = _text(marker.get("display_name"), "Unknown marker")
+    raw_name = _text(marker.get("raw_name"), "")
+    if _looks_like_marker_abbreviation(raw_name, canonical):
+        return raw_name
+    return canonical
+
+
+def _looks_like_marker_abbreviation(raw_name: str, canonical: str) -> bool:
+    raw = raw_name.strip()
+    if not raw or raw.casefold() == canonical.strip().casefold():
+        return False
+    if len(raw) > 16:
+        return False
+
+    compact = re.sub(r"[\s._-]+", "", raw)
+    letters = [char for char in compact if char.isalpha()]
+    if not letters:
+        return False
+
+    if any(symbol in raw for symbol in ("%#",)):
+        return True
+    if "/" in raw and len(compact) <= 12:
+        return True
+
+    uppercase_ratio = sum(char.isupper() for char in letters) / len(letters)
+    if len(compact) <= 10 and uppercase_ratio >= 0.6:
+        return True
+
+    # Common lab shorthand is often title-cased, e.g. Hct or Plt.
+    canonical_is_descriptive = len(canonical) > len(raw) + 3 or " " in canonical
+    return canonical_is_descriptive and len(compact) <= 5 and raw[0].isupper()
+
+
+def _final_range_position(marker: dict[str, Any]) -> int:
+    quality = _final_quality(marker)
+    if quality is not None:
+        return quality["position"]
+
+    return int((marker.get("comparison") or {}).get("range_position") or 50)
+
+
+def _final_quality(marker: dict[str, Any]) -> dict[str, Any] | None:
+    values = _final_reference_values(marker)
+    numeric = _final_numeric_value(marker)
+    if values is None or numeric is None:
+        return None
+
+    low, normal, high = values
+    if high <= low:
+        return None
+
+    if numeric < low:
+        distance = (low - numeric) / max(normal - low, high - low, 1.0)
+        return {"status": "bad", "position": max(6, min(30, round(26 - distance * 18)))}
+    if numeric > high:
+        distance = (numeric - high) / max(high - normal, high - low, 1.0)
+        return {"status": "bad", "position": max(6, min(30, round(26 - distance * 18)))}
+
+    if numeric <= normal:
+        side_width = normal - low
+    else:
+        side_width = high - normal
+
+    if side_width <= 0:
+        closeness = 1.0
+    else:
+        closeness = 1 - abs(numeric - normal) / side_width
+    closeness = max(0.0, min(1.0, closeness))
+
+    if closeness >= 0.7:
+        # Good/ideal zone: the closer the patient is to the KG normal value, the fuller the bar.
+        position = 68 + (closeness - 0.7) / 0.3 * 26
+        return {"status": "ideal", "position": max(68, min(94, round(position)))}
+
+    # Normal zone: in range, but not close enough to the KG normal value to call it ideal.
+    position = 38 + closeness / 0.7 * 26
+    return {"status": "normal", "position": max(38, min(64, round(position)))}
+
+
+def _final_reference_values(marker: dict[str, Any]) -> tuple[float, float, float] | None:
+    selection = marker.get("reference_selection") or {}
+    values = selection.get("values") or {}
+    try:
+        low = float(values["minimal_value"])
+        normal = float(values["normal_value"])
+        high = float(values["maximum_value"])
+    except (KeyError, TypeError, ValueError):
+        return None
+    if high <= low:
+        return None
+    return low, normal, high
+
+
+def _final_numeric_value(marker: dict[str, Any]) -> float | None:
+    try:
+        return float(marker.get("numeric_value"))
+    except (TypeError, ValueError):
+        return None
+
+
+def _final_improvement_text(instructions: dict[str, Any]) -> str:
+    parts = []
+    for label, key in (("Food", "food"), ("Exercise", "exercises"), ("Supplements", "supplements")):
+        items = instructions.get(key)
+        if isinstance(items, list) and items:
+            parts.append(f"{label}: {' '.join(str(item) for item in items[:2])}")
+    return " ".join(parts) or "No improvement guidance is stored for this marker."
+
+
+def _final_context_text(marker: dict[str, Any]) -> str:
+    reference = _reference_label(marker)
+    sex_context = ((marker.get("knowledge") or {}).get("sex_significance") or {}).get("summary")
+    confidence = _confidence_percent(marker.get("confidence"))
+    source = _text(marker.get("source_text"), "")
+    parts = [reference, f"Extraction confidence: {confidence}%."]
+    if sex_context:
+        parts.append(str(sex_context))
+    if source:
+        parts.append(f"Source row: {source}")
+    return " ".join(parts)
+
+
+def _final_patient_context(patient: dict[str, Any]) -> str:
+    age = _text(patient.get("age"), "")
+    sex = _text(patient.get("sex"), "")
+    age_group = _text(patient.get("age_group"), "")
+    parts = []
+    if age:
+        parts.append(f"Age: {age}")
+    if sex and sex != "unknown":
+        parts.append(f"Sex: {sex.title()}")
+    if age_group:
+        parts.append(f"Group: {age_group.title()}")
+    return " | ".join(parts)
+
+
+def _empty_final_marker_card() -> str:
+    return """
+    <article class="bte-ideal-marker bte-ideal-marker--normal">
+      <div class="bte-ideal-marker-head">
+        <div class="bte-ideal-title-line">
+          <h3>No markers extracted yet</h3>
+          <span class="bte-ideal-status">Normal</span>
+        </div>
+      </div>
+    </article>
     """
 
 
@@ -461,6 +750,69 @@ def _empty_marker_card() -> str:
       No markers extracted yet.
     </div>
     """
+
+
+def _reference_label(test: dict[str, Any]) -> str:
+    lab_range = _text(test.get("lab_reference_range"), "")
+    if lab_range:
+        return f"Lab range: {lab_range}"
+    return _statistics_text(test)
+
+
+def _statistics_text(test: dict[str, Any]) -> str:
+    selection = test.get("reference_selection") or {}
+    values = selection.get("values") or {}
+    low = values.get("minimal_value")
+    normal = values.get("normal_value")
+    high = values.get("maximum_value")
+    if low is None and high is None:
+        return "No knowledge graph range available."
+    age_group = _text(selection.get("age_group"), "adult").title()
+    sex = _text(selection.get("sex"), "not_applied").replace("_", " ").title()
+    unit = _text(test.get("unit"), "")
+    return f"{age_group}, {sex}: {low} min / {normal} typical / {high} max {unit}".strip()
+
+
+def _insight_block(label: str, text: str) -> str:
+    return f"""
+    <div>
+      <span>{escape(label)}</span>
+      <p>{escape(text)}</p>
+    </div>
+    """
+
+
+def _guidance_column(label: str, items: Any) -> str:
+    if not isinstance(items, list) or not items:
+        body = "<li>No guidance stored for this marker.</li>"
+    else:
+        body = "".join(f"<li>{escape(str(item))}</li>" for item in items[:3])
+    return f"""
+    <div>
+      <strong>{escape(label)}</strong>
+      <ul>{body}</ul>
+    </div>
+    """
+
+
+def _source_links(markers: list[dict[str, Any]], sources: dict[str, str]) -> str:
+    source_ids: list[str] = []
+    for marker in markers:
+        knowledge = marker.get("knowledge") or {}
+        for source_id in knowledge.get("source_ids") or []:
+            if source_id not in source_ids:
+                source_ids.append(source_id)
+
+    links = []
+    for source_id in source_ids[:8]:
+        url = sources.get(source_id)
+        if not url:
+            continue
+        links.append(f'<li><a href="{escape(url)}" target="_blank" rel="noreferrer">{escape(source_id)}</a></li>')
+
+    if not links:
+        return "<p>No source links available for matched markers.</p>"
+    return f"<ul>{''.join(links)}</ul>"
 
 
 def _text(value: Any, fallback: str) -> str:
@@ -818,7 +1170,9 @@ gradio-app,
 .bte-status-row,
 .bte-status-row > div,
 .bte-ideal-row,
-.bte-ideal-row > div {
+.bte-ideal-row > div,
+.bte-final-row,
+.bte-final-row > div {
   width: var(--bte-rail) !important;
   max-width: var(--bte-rail) !important;
   margin-left: auto !important;
@@ -834,7 +1188,10 @@ gradio-app,
 .bte-status-row .block,
 .bte-ideal-row .prose,
 .bte-ideal-row .html-container,
-.bte-ideal-row .block {
+.bte-ideal-row .block,
+.bte-final-row .prose,
+.bte-final-row .html-container,
+.bte-final-row .block {
   padding: 0 !important;
   margin: 0 !important;
   background: transparent !important;
@@ -1775,6 +2132,78 @@ button.bte-action *,
   color: var(--bte-muted);
 }
 
+.bte-marker-evidence {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+}
+
+.bte-marker-evidence > span {
+  color: var(--bte-ink);
+  font-size: 12px;
+  font-weight: 760;
+  text-transform: uppercase;
+}
+
+.bte-marker-insights {
+  min-width: 0;
+  display: grid;
+  gap: 14px;
+}
+
+.bte-range-scale--report {
+  padding: 12px 0 4px;
+}
+
+.bte-insight-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.bte-insight-grid div {
+  min-width: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--bte-line);
+}
+
+.bte-insight-grid span,
+.bte-guidance strong {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--bte-ink);
+  font-size: 12px;
+  font-weight: 760;
+  text-transform: uppercase;
+}
+
+.bte-insight-grid p {
+  margin: 0;
+  color: var(--bte-muted);
+  font-size: 14px;
+  line-height: 1.48;
+}
+
+.bte-guidance {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.bte-guidance div {
+  min-width: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--bte-line);
+}
+
+.bte-guidance ul {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--bte-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .bte-confidence {
   height: 8px;
   border-radius: 999px;
@@ -1815,6 +2244,39 @@ button.bte-action *,
   color: var(--bte-muted);
 }
 
+.bte-report-aside a {
+  color: var(--bte-blue);
+  overflow-wrap: anywhere;
+}
+
+.bte-patient-context {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 16px;
+}
+
+.bte-patient-context div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--bte-line);
+}
+
+.bte-patient-context dt {
+  color: var(--bte-muted);
+  font-size: 12px;
+  font-weight: 760;
+  text-transform: uppercase;
+}
+
+.bte-patient-context dd {
+  margin: 0;
+  color: var(--bte-ink);
+  font-weight: 650;
+  text-align: right;
+}
+
 .bte-disclaimer {
   display: grid;
   gap: 4px;
@@ -1838,6 +2300,12 @@ button.bte-action *,
   display: grid;
   gap: 16px;
   background: transparent;
+}
+
+.bte-final-report {
+  width: var(--bte-rail) !important;
+  max-width: var(--bte-rail) !important;
+  margin: 0 auto !important;
 }
 
 .bte-ideal-hero {
@@ -1920,7 +2388,11 @@ button.bte-action *,
 .bte-ideal-doc:has(#bte-filter-total:checked) .bte-ideal-stat--total,
 .bte-ideal-doc:has(#bte-filter-ideal:checked) .bte-ideal-stat--ideal,
 .bte-ideal-doc:has(#bte-filter-normal:checked) .bte-ideal-stat--normal,
-.bte-ideal-doc:has(#bte-filter-bad:checked) .bte-ideal-stat--bad {
+.bte-ideal-doc:has(#bte-filter-bad:checked) .bte-ideal-stat--bad,
+.bte-ideal-doc:has(#bte-final-filter-total:checked) .bte-ideal-stat--total,
+.bte-ideal-doc:has(#bte-final-filter-ideal:checked) .bte-ideal-stat--ideal,
+.bte-ideal-doc:has(#bte-final-filter-normal:checked) .bte-ideal-stat--normal,
+.bte-ideal-doc:has(#bte-final-filter-bad:checked) .bte-ideal-stat--bad {
   border-color: transparent;
   background:
     linear-gradient(var(--bte-stat-bg), var(--bte-stat-bg)) padding-box,
@@ -1974,7 +2446,10 @@ button.bte-action *,
 
 .bte-ideal-doc:has(#bte-filter-ideal:checked) .bte-ideal-marker:not(.bte-ideal-marker--ideal),
 .bte-ideal-doc:has(#bte-filter-normal:checked) .bte-ideal-marker:not(.bte-ideal-marker--normal),
-.bte-ideal-doc:has(#bte-filter-bad:checked) .bte-ideal-marker:not(.bte-ideal-marker--bad) {
+.bte-ideal-doc:has(#bte-filter-bad:checked) .bte-ideal-marker:not(.bte-ideal-marker--bad),
+.bte-ideal-doc:has(#bte-final-filter-ideal:checked) .bte-ideal-marker:not(.bte-ideal-marker--ideal),
+.bte-ideal-doc:has(#bte-final-filter-normal:checked) .bte-ideal-marker:not(.bte-ideal-marker--normal),
+.bte-ideal-doc:has(#bte-final-filter-bad:checked) .bte-ideal-marker:not(.bte-ideal-marker--bad) {
   display: none;
 }
 
@@ -2281,8 +2756,16 @@ button.bte-action *,
   .bte-hero-grid > :nth-child(3),
   .bte-run-status,
   .bte-report-anchor,
-  .bte-ideal-doc {
+  .bte-ideal-row {
     display: none !important;
+  }
+
+  .bte-final-report {
+    display: grid !important;
+    width: calc(100vw - 88px) !important;
+    max-width: calc(100vw - 88px) !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
   }
 
   .bte-workflow-panel--upload,
@@ -2406,6 +2889,11 @@ button.bte-action *,
     grid-template-columns: 1fr;
   }
 
+  .bte-insight-grid,
+  .bte-guidance {
+    grid-template-columns: 1fr;
+  }
+
   .bte-marker-value {
     text-align: left;
   }
@@ -2445,7 +2933,7 @@ with gr.Blocks(title="Blood Test Explainer") as demo:
                 <div>
                   <p class="bte-kicker">Clinical clarity from raw documents</p>
                   <h1>Blood Test Explainer</h1>
-                  <p>Upload a lab report and turn dense medical paperwork into a polished extraction report with raw markers, values, units, reference ranges, and confidence signals.</p>
+                  <p>Upload a lab report and turn dense medical paperwork into a polished health report with extracted values, age and sex context, and knowledge graph explanations.</p>
                 </div>
                 """
             )
@@ -2507,7 +2995,7 @@ with gr.Blocks(title="Blood Test Explainer") as demo:
         show_progress="hidden",
     )
 
-    with gr.Group(visible=False, elem_classes=["bte-report-panel"]) as report_panel:
+    with gr.Group(visible=False, elem_classes=["bte-report-panel", "bte-final-row"]) as report_panel:
         report = gr.HTML(empty_report_html())
 
     run_button.click(

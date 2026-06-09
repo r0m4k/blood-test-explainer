@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import requests
@@ -25,6 +25,11 @@ You are extracting laboratory test results from a medical document.
 
 Return only valid JSON with this exact shape:
 {
+  "patient": {
+    "age": "string or null",
+    "age_years": 0.0,
+    "sex": "male | female | unknown"
+  },
   "tests": [
     {
       "marker": "string",
@@ -42,6 +47,9 @@ Return only valid JSON with this exact shape:
 Rules:
 - Extract pure lab values only.
 - Do not diagnose, interpret, recommend food, supplements, or exercise.
+- Extract patient age and sex only when visibly present in the document.
+- Normalize sex to "male", "female", or "unknown"; do not infer sex from the patient's name.
+- Use null for age and age_years when age is missing.
 - Do not invent missing values.
 - Preserve the units and reference ranges exactly as shown when possible.
 - If a marker is unreadable, omit it or add a short note.
@@ -56,6 +64,7 @@ class ExtractionResult:
     notes: list[str]
     raw_response: str
     request_summary: dict[str, Any]
+    patient: dict[str, Any] = field(default_factory=dict)
 
 
 class OpenBMBExtractor:
@@ -119,6 +128,7 @@ class OpenBMBExtractor:
         parsed = _parse_json_response(raw_response)
 
         return ExtractionResult(
+            patient=_normalize_patient(parsed.get("patient", {})),
             tests=_normalize_tests(parsed.get("tests", [])),
             notes=_normalize_notes(parsed.get("notes", [])),
             raw_response=raw_response,
@@ -237,11 +247,43 @@ def _normalize_notes(value: Any) -> list[str]:
     return [str(note).strip() for note in value if str(note).strip()]
 
 
+def _normalize_patient(value: Any) -> dict[str, Any]:
+    if not isinstance(value, dict):
+        return {"age": None, "age_years": None, "sex": "unknown"}
+
+    age = _optional_string(value.get("age") or value.get("age_text") or value.get("patient_age"))
+    age_years = _optional_float(value.get("age_years"))
+    sex = _normalize_sex(value.get("sex") or value.get("patient_sex") or value.get("gender"))
+    return {
+        "age": age,
+        "age_years": age_years,
+        "sex": sex,
+    }
+
+
 def _optional_string(value: Any) -> str | None:
     if value is None:
         return None
     text = str(value).strip()
     return text or None
+
+
+def _optional_float(value: Any) -> float | None:
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _normalize_sex(value: Any) -> str:
+    text = str(value or "").strip().casefold()
+    if text in {"m", "male"}:
+        return "male"
+    if text in {"f", "female"}:
+        return "female"
+    return "unknown"
 
 
 def _confidence(value: Any) -> float:
