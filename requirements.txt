@@ -3,3 +3,6 @@ requests==2.32.5
 pillow==12.0.0
 pymupdf==1.26.6
 json-repair==0.60.1
+# Local, offline inference (off-grid + quantization). Prebuilt CPU wheels exist; the Space
+# build may need build tools if it compiles from source. Required once EXTRACTOR_BACKEND=local.
+llama-cpp-python==0.3.16
