@@ -2,11 +2,9 @@
 title: Blood Test Explainer
 emoji: 📊
 colorFrom: green
-colorTo: green
-sdk: gradio
-sdk_version: 6.17.3
-python_version: '3.13'
-app_file: app.py
+colorTo: blue
+sdk: docker
+app_port: 7860
 pinned: false
 ---
 
@@ -43,26 +41,38 @@ The app now runs extraction and deterministic knowledge-graph enrichment:
 
 The knowledge graph is educational context, not diagnosis. The lab-provided reference range remains the primary comparison when it is available.
 
-Local setup:
+## Hugging Face Space Deployment
+
+The Hugging Face Space is intentionally deployed as a **Docker Space**. Do not change this
+workflow back to a Gradio Space.
+
+The Docker image builds `llama.cpp`, downloads the MiniCPM-V GGUF model and vision projector at
+build time, stores them inside `/models`, starts `llama-server` on `127.0.0.1:8080`, and then runs
+the Gradio app against that local server. This keeps runtime inference local to the Space container
+and avoids external API calls while users interact with the app.
+
+This workflow should not be further changed. When the fine-tuned model is ready, only replace the
+model variables in `Dockerfile`:
+
+```dockerfile
+ARG MODEL_REPO=openbmb/MiniCPM-V-4.6-gguf
+ARG MODEL_FILE=MiniCPM-V-4_6-Q4_K_M.gguf
+ARG MMPROJ_FILE=mmproj-model-f16.gguf
+```
+
+The future fine-tuned deployment should keep the same Docker + `llama-server` architecture and only
+insert the fine-tuned model repository/path into those variables.
+
+## Local Setup
 
 ```bash
 pip install -r requirements.txt
-export OPENBMB_API_KEY="your-openbmb-token"
-python app.py
+hf download openbmb/MiniCPM-V-4.6-gguf MiniCPM-V-4_6-Q4_K_M.gguf mmproj-model-f16.gguf --local-dir ./models
+llama-server -m ./models/MiniCPM-V-4_6-Q4_K_M.gguf --mmproj ./models/mmproj-model-f16.gguf --port 8080
 ```
 
-You can also create a local `.env` file:
+Then, in a second terminal:
 
-```text
-OPENBMB_API_KEY=your-openbmb-token
-OPENBMB_API_URL=http://35.203.155.71:8003/v1/chat/completions
-OPENBMB_MODEL=MiniCPM-V-4.6
+```bash
+EXTRACTOR_BACKEND=local python app.py
 ```
-
-Hugging Face Space setup:
-
-- Add `OPENBMB_API_KEY` as a Space secret.
-- Optionally set `OPENBMB_API_URL` and `OPENBMB_MODEL` as Space variables.
-- Default endpoint is MiniCPM-V 4.6 through an OpenAI-compatible chat completions API.
-
-This API-backed extractor is temporary. The extraction layer is isolated so it can later be replaced by a local fine-tuned OpenBMB model running through `llama.cpp`.

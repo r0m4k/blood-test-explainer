@@ -4,6 +4,17 @@ The submission Space runs the model **on-device** via a Docker image: it builds 
 llama.cpp, **bakes the MiniCPM-V GGUF into the image at build time**, and launches
 `llama-server` + the Gradio app. No external API at runtime → **off-grid**.
 
+This deployment workflow is intentionally fixed:
+
+1. The Space must stay a Docker Space.
+2. The model must be downloaded during Docker image build, not when the Gradio app starts.
+3. Runtime inference must go through local `llama-server` at `127.0.0.1:8080`.
+4. The model files must not be committed to the Space git repo.
+5. When the fine-tuned model is ready, only replace the model variables/path in the Dockerfile.
+
+Do not further change this workflow. The only intended future change is inserting the fine-tuned
+model repository/file path into the existing Docker variables.
+
 ## 1. Make the Space a Docker Space (under the org)
 The Space `build-small-hackathon/blood-test-explainer` must use **`sdk: docker`**. Set its
 `README.md` frontmatter to exactly:
@@ -13,7 +24,7 @@ The Space `build-small-hackathon/blood-test-explainer` must use **`sdk: docker`*
 title: Blood Test Explainer
 emoji: 📊
 colorFrom: green
-colorTo: green
+colorTo: blue
 sdk: docker
 app_port: 7860
 pinned: false
@@ -29,6 +40,10 @@ branch's contents. If the Space is a separate HF git repo, copy these files into
 First build takes ~10–15 min (compiles llama.cpp + downloads the ~1.6 GB model). When it's
 up, upload a report → it extracts fully offline.
 
+The model is larger than the Space git repo limit, so it is intentionally not pushed to the
+Space repository. The Docker build downloads it into the image layer under `/models`, which is
+separate from git storage.
+
 ## 4. Ship the fine-tuned model (later)
 Once you've fine-tuned and converted to GGUF, upload it to an HF model repo, then rebuild the
 Space with the build-args pointing at it:
@@ -37,6 +52,14 @@ Space with the build-args pointing at it:
 MODEL_REPO=<you>/minicpmv-lab-gguf  MODEL_FILE=<your-model>.Q4_K_M.gguf  MMPROJ_FILE=mmproj-model-f16.gguf
 ```
 (In a Space, set these as build-time variables, or edit the `ARG` defaults in the Dockerfile.)
+
+Only these model variables should change for the fine-tuned version:
+
+```dockerfile
+ARG MODEL_REPO=openbmb/MiniCPM-V-4.6-gguf
+ARG MODEL_FILE=MiniCPM-V-4_6-Q4_K_M.gguf
+ARG MMPROJ_FILE=mmproj-model-f16.gguf
+```
 
 ## 5. Verify off-grid (badge)
 - Model is baked into the image at build time; `HF_HUB_OFFLINE=1` + `TRANSFORMERS_OFFLINE=1`.

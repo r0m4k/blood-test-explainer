@@ -1,6 +1,9 @@
 # Offline Blood Test Explainer — MiniCPM-V 4.6 served on-device by llama.cpp, no external APIs.
 # HF Docker Space. The model is baked into the image at build time, so there is zero network
-# at runtime (off-grid badge). Swap MODEL_REPO to your fine-tuned GGUF repo when it's ready.
+# at runtime (off-grid badge).
+#
+# Do not change this workflow. Keep Docker + build-time model download + local llama-server.
+# When the fine-tuned model is ready, only replace MODEL_REPO / MODEL_FILE / MMPROJ_FILE below.
 FROM python:3.11-slim
 
 ENV DEBIAN_FRONTEND=noninteractive
