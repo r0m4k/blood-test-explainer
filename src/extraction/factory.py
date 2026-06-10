@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 
 from src.extraction.base import Extractor
+from src.extraction.llamacpp_gpu import LlamaCppGPUExtractor
 from src.extraction.local_minicpmv import LocalMiniCPMVExtractor
 from src.extraction.local_server import LocalServerExtractor
 from src.extraction.zerogpu_transformers import ZeroGPUTransformersExtractor
@@ -27,6 +28,9 @@ def build_extractor(
 
     if backend in ("auto", "zerogpu", "zero-gpu", "transformers"):
         return ZeroGPUTransformersExtractor(model_id=model)
+    if backend in ("llamacpp-gpu", "gpu-llamacpp", "llama-champion"):
+        # llama.cpp on the ZeroGPU GPU -> earns the Llama Champion badge while staying off-grid.
+        return LlamaCppGPUExtractor()
     if backend == "api":
         return OpenBMBExtractor(api_url=api_url, model=model, api_key=api_key)
     if backend in ("local", "server", "local-server"):
