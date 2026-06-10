@@ -88,11 +88,25 @@ def _load_model(model_id: str):
     from transformers import AutoModelForImageTextToText, AutoProcessor
 
     processor = AutoProcessor.from_pretrained(model_id)
-    model = AutoModelForImageTextToText.from_pretrained(
-        model_id,
-        torch_dtype=torch.bfloat16 if torch.cuda.is_available() else "auto",
-        device_map="auto",
-    )
+
+    # 4-bit (NF4) quantization on GPU: earns the quantization badge and roughly quarters the
+    # GPU memory footprint (helps stay within ZeroGPU limits). Set ZEROGPU_QUANTIZE=0 to fall
+    # back to bf16 full precision if bitsandbytes ever misbehaves on the runtime.
+    use_4bit = os.getenv("ZEROGPU_QUANTIZE", "1") != "0" and torch.cuda.is_available()
+    load_kwargs: dict[str, Any] = {"device_map": "auto"}
+    if use_4bit:
+        from transformers import BitsAndBytesConfig
+
+        load_kwargs["quantization_config"] = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_quant_type="nf4",
+            bnb_4bit_compute_dtype=torch.bfloat16,
+            bnb_4bit_use_double_quant=True,
+        )
+    else:
+        load_kwargs["torch_dtype"] = torch.bfloat16 if torch.cuda.is_available() else "auto"
+
+    model = AutoModelForImageTextToText.from_pretrained(model_id, **load_kwargs)
     model.eval()
     return processor, model
 
