@@ -57,7 +57,7 @@ hf_cache = modal.Volume.from_name("blood-test-hf-cache", create_if_missing=True)
     timeout=6 * 60 * 60,
     volumes={"/adapters": adapters, "/root/.cache/huggingface": hf_cache},
 )
-def train(n: int = 4000, epochs: int = 2, seed: int = 13) -> str:
+def train(n: int = 2000, epochs: int = 1, lr: float = 2e-5, seed: int = 13) -> str:
     import os
     import subprocess
     import sys
@@ -87,7 +87,11 @@ def train(n: int = 4000, epochs: int = 2, seed: int = 13) -> str:
         "--num_train_epochs", str(epochs),
         "--lora_rank", "16",
         "--lora_alpha", "32",
-        "--learning_rate", "1e-4",
+        # Gentle LoRA: a low LR + warmup nudges output format without overwriting the base model's
+        # vision-extraction ability (the previous 1e-4 / 2-epoch run memorized the synthetic data
+        # and regressed on real reports). Tune via --lr.
+        "--learning_rate", str(lr),
+        "--warmup_ratio", "0.1",
         "--per_device_train_batch_size", "2",
         "--gradient_accumulation_steps", "8",
         "--max_length", "2048",
@@ -105,8 +109,8 @@ def train(n: int = 4000, epochs: int = 2, seed: int = 13) -> str:
 
 
 @app.local_entrypoint()
-def main(n: int = 4000, epochs: int = 2) -> None:
-    path = train.remote(n=n, epochs=epochs)
+def main(n: int = 2000, epochs: int = 1, lr: float = 2e-5) -> None:
+    path = train.remote(n=n, epochs=epochs, lr=lr)
     print(f"\nLoRA adapters saved to Modal volume 'blood-test-adapters' at {path}")
     print("Next: merge the adapter into the base model and push it to the Hub:")
     print("  modal run train/modal_finetune.py::merge --repo-id <owner>/<model-name>")
@@ -137,16 +141,18 @@ def merge_and_push(repo_id: str, adapter_dir: str = "/adapters/minicpmv-lab-lora
     if not checkpoints:
         raise RuntimeError(f"No LoRA checkpoints found under {adapter_dir}")
     latest = checkpoints[-1]
-    print(f"Merging LoRA checkpoint: {latest}")
+    merged_dir = f"{latest}-merged"
 
-    env = {**os.environ, "USE_HF": "1"}
-    # ms-swift merges the adapter into the base model; the merged weights land in <ckpt>-merged.
-    subprocess.run(["swift", "export", "--adapters", latest, "--merge_lora", "true"], check=True, env=env)
-
-    merged = sorted(glob.glob(f"{adapter_dir}/v*/checkpoint-*-merged"), key=os.path.getmtime)
-    if not merged:
-        raise RuntimeError("swift export did not produce a *-merged directory")
-    merged_dir = merged[-1]
+    if os.path.isdir(merged_dir):
+        # Re-run after a push failure: reuse the already-merged weights (swift export refuses to
+        # overwrite an existing dir), so we go straight to the upload.
+        print(f"Reusing already-merged model: {merged_dir}")
+    else:
+        print(f"Merging LoRA checkpoint: {latest}")
+        env = {**os.environ, "USE_HF": "1"}
+        subprocess.run(["swift", "export", "--adapters", latest, "--merge_lora", "true"], check=True, env=env)
+        if not os.path.isdir(merged_dir):
+            raise RuntimeError(f"swift export did not produce {merged_dir}")
     print(f"Merged model directory: {merged_dir}")
 
     from huggingface_hub import HfApi
