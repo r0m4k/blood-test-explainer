@@ -1,100 +1,111 @@
-# Runbook — Offline extraction + MiniCPM-V fine-tune (Items 1 & 2)
+# Runbook — ZeroGPU Extraction + Fine-Tuned Model Swap
 
-This branch makes extraction run **fully offline on a fine-tuned MiniCPM-V** (off-grid +
-fine-tune + quantization badges), while keeping the hosted API as a dev fallback so nothing
-breaks before the GGUF exists.
+The active deployment path is now **Gradio ZeroGPU**.
 
-## What changed (and why)
-| Area | What | Earns |
-|---|---|---|
-| `src/extraction/` | Backend abstraction: **local MiniCPM-V (llama.cpp)** + API fallback + `build_extractor()` factory | off-grid |
-| `src/grammar.py` | GBNF grammar → output is always valid `{tests,notes}` JSON | reliability |
-| `src/markers.py` | 31-marker canonical reference (names, aliases, units, ranges) — also the KB seed | extraction + eval + KB |
-| `train/synth_reports.py` | Renders format-diverse lab-report **images + gold JSON** (perfect labels) | fine-tune data |
-| `train/to_sft_dataset.py` | → vision-SFT (`messages`+`images`) format | fine-tune data |
-| `train/modal_finetune.py` | LoRA fine-tune MiniCPM-V **on Modal** (generates data on the box) | fine-tune + Modal prize |
-| `scripts/merge_lora.py`, `scripts/convert_to_gguf.sh` | merge → GGUF + mmproj → **Q4_K_M** | quantization |
-| `eval/run_eval.py`, `src/eval_scoring.py` | field-level P/R/F1 + value/unit/status accuracy | OpenBMB before/after |
-| `app.py` | routes through `build_extractor()` (env `EXTRACTOR_BACKEND`) | wiring |
+This replaced the Docker + `llama-server` path because ZeroGPU is only available for Gradio SDK Spaces. The Docker build was also failing on free CPU hardware with `OOMKilled`.
 
-Backend selection — `EXTRACTOR_BACKEND`:
-- `auto` (default): local if a GGUF is configured + llama.cpp importable, else API. **Stays working today, flips to offline the moment the GGUF lands — no code change.**
-- `local`: force offline MiniCPM-V. `api`: force the hosted endpoint.
+## Active Architecture
 
-## Local dev / tests (no model needed)
-```bash
-python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt          # or: pip install pillow pytest requests pymupdf json-repair
-pytest -q                                # data pipeline + eval scoring
-python train/synth_reports.py --n 12 --out train/data/preview   # eyeball the images
+| Area | Current choice |
+|---|---|
+| Space SDK | `gradio` |
+| Hardware | ZeroGPU |
+| Model runtime | Official OpenBMB Transformers path |
+| Default backend | `EXTRACTOR_BACKEND=auto`, resolving to `zerogpu` |
+| Model variable | `ZEROGPU_MODEL_ID` |
+| Extraction backend | `src/extraction/zerogpu_transformers.py` |
+| Report enrichment | `src/report_pipeline.py` + `kb/cbc_knowledge_graph.json` |
+
+Do not switch the Space back to Docker unless the project intentionally gives up ZeroGPU.
+
+## Backend Selection
+
+`EXTRACTOR_BACKEND`:
+
+- `auto`: default, uses ZeroGPU Transformers.
+- `zerogpu`: force the ZeroGPU Transformers backend.
+- `api`: hosted OpenBMB endpoint for development fallback only.
+- `local` / `server` / `llamacpp`: local experimental backends, not the active HF Space path.
+
+## HF Space Requirements
+
+`README.md` frontmatter must stay:
+
+```yaml
+---
+title: Blood Test Explainer
+emoji: 📊
+colorFrom: green
+colorTo: blue
+sdk: gradio
+sdk_version: 6.17.3
+python_version: "3.10.13"
+app_file: app.py
+pinned: false
+---
 ```
 
-## The fine-tune → offline pipeline (run these in order)
-### Step 0: validate offline with the official base GGUF first
-Before fine-tuning, prove the local backend works with OpenBMB's official base GGUF + mmproj:
+Install dependencies from `requirements.txt`, including:
+
+```text
+spaces
+transformers[torch]>=5.7.0
+torch
+torchvision
+av
+accelerate
+```
+
+The backend uses `@spaces.GPU(duration=120)` for the model generation call.
+
+## Current Model
+
+Current default:
 
 ```bash
-# Install llama.cpp tooling locally.
-brew install llama.cpp
+ZEROGPU_MODEL_ID=openbmb/MiniCPM-V-4.6
+```
 
-# Download official base GGUF assets, including the official mmproj.
-mkdir -p models
-huggingface-cli download openbmb/MiniCPM-V-4.6-gguf --local-dir ./models
+This is the official OpenBMB model. No model files are committed to the Space repo.
 
-# Point LOCAL_MODEL_PATH at the downloaded base LLM GGUF, and LOCAL_MMPROJ_PATH at the
-# downloaded mmproj GGUF. Use the exact filenames from ./models.
-export EXTRACTOR_BACKEND=local
-export LOCAL_MODEL_PATH=./models/<official-base-model>.gguf
-export LOCAL_MMPROJ_PATH=./models/<official-mmproj>.gguf
+## Fine-Tuned Model Swap
+
+When the fine-tuned model is ready:
+
+1. Upload it to a Hugging Face model repo.
+2. Keep the same Gradio + ZeroGPU + Transformers architecture.
+3. Change only:
+
+```bash
+ZEROGPU_MODEL_ID=<owner>/<fine-tuned-minicpm-v-model>
+```
+
+Do not add model files to the Space git repo. Do not reintroduce Docker or `llama-server` for the ZeroGPU deployment.
+
+## Local Development
+
+For UI-only work:
+
+```bash
 python app.py
 ```
 
-Confirm extraction works fully offline before starting the fine-tune.
+For local extraction testing with the same backend:
 
 ```bash
-# 1) Fine-tune MiniCPM-V on Modal (data generated on the box; needs Modal credits).
-#    First confirm MODEL_TYPE in train/modal_finetune.py against the MiniCPM-V finetune guide.
-modal run train/modal_finetune.py --n 4000 --epochs 2
-
-# 2) Pull adapters from the Modal volume 'blood-test-adapters', then merge.
-python scripts/merge_lora.py --base openbmb/MiniCPM-V-4.6 \
-    --adapters ./adapters/minicpmv-lab-lora --out ./merged-minicpmv-lab
-
-# 3) Convert only the merged LLM to GGUF and quantize Q4_K_M.
-#    The script downloads/reuses the official openbmb/MiniCPM-V-4.6-gguf mmproj because LoRA
-#    touches the LLM, not the vision encoder.
-LLAMA_CPP=./llama.cpp bash scripts/convert_to_gguf.sh ./merged-minicpmv-lab
-
-# 4) Point the app at the local model and go offline.
-export EXTRACTOR_BACKEND=local
-export LOCAL_MODEL_PATH=./models/minicpmv-lab.Q4_K_M.gguf
-export LOCAL_MMPROJ_PATH=./models/minicpmv-lab.mmproj.gguf
-python app.py
+pip install -r requirements.txt
+EXTRACTOR_BACKEND=zerogpu python app.py
 ```
 
-## Before/after (the OpenBMB proof)
+Local machines without a suitable GPU may be slow or may not have enough memory for full model inference. In that case, test UI/report rendering locally and test extraction on the HF ZeroGPU Space.
+
+## Verification
+
+Run before pushing:
+
 ```bash
-# held-out eval set
-python train/synth_reports.py --n 60 --out eval/data/synth_eval --seed 99
-
-# base model (point LOCAL_MODEL_PATH at the un-fine-tuned GGUF), then the fine-tuned one:
-EXTRACTOR_BACKEND=local LOCAL_MODEL_PATH=... LOCAL_MMPROJ_PATH=... \
-  python eval/run_eval.py --labels eval/data/synth_eval/labels.jsonl --run
-# also drop in the ~15-30 real synthetic reports you collect → the credibility number
+python3 -m py_compile app.py src/*.py src/extraction/*.py
+.venv/bin/python -m pytest tests/test_report_pipeline.py
 ```
 
-## Deploy (off-grid) checklist
-- [ ] Bundle the two `.gguf` files via **git-lfs** in the Space repo (zero network at runtime).
-- [ ] Space secrets/vars: `EXTRACTOR_BACKEND=local`, `LOCAL_MODEL_PATH`, `LOCAL_MMPROJ_PATH`.
-- [ ] `LOCAL_N_GPU_LAYERS>0` if on ZeroGPU; `0` for pure CPU.
-- [ ] Verify zero egress (no `requests` call on the local path).
-
-## Verify-on-hardware (can't be tested in CI)
-1. `train/modal_finetune.py`: confirm the ms-swift `MODEL_TYPE` for **MiniCPM-V 4.6**.
-2. `scripts/convert_to_gguf.sh`: llama.cpp `convert_hf_to_gguf.py` path and official mmproj filename for 4.6.
-3. `src/extraction/local_minicpmv.py`: the `LOCAL_CHAT_HANDLER` class for your llama-cpp-python build.
-
-## Still TODO (next PRs, not this one)
-- Knowledge base + **cross-marker reasoning** (makes MiniCPM the star, the OpenBMB clincher).
-- **Agent trace** (Item 3): turn the single call into a streamed Ingest→…→Render pipeline.
-- Real sample reports bundled + downloadable `.html` document + video/social/model-card/dataset.
+Then verify the Space build uses Gradio, not Docker, and that ZeroGPU can be selected in the Space hardware panel.

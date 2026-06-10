@@ -4,6 +4,11 @@
 > Target prizes: **OpenAI + OpenBMB + Modal** + all badges.
 > ⚠️ Confirm the real submission deadline first — teams are already final-submitting.
 
+> 2026-06-10 deployment update: the active HF Space path is now **Gradio ZeroGPU + official
+> OpenBMB Transformers model**. The Docker/llama.cpp serving plan was replaced because ZeroGPU is
+> Gradio-only and the Docker build was OOM-killed on free CPU hardware. For the fine-tuned model,
+> keep this ZeroGPU architecture and replace only `ZEROGPU_MODEL_ID`.
+
 ---
 
 ## 1. Where we are (DONE — solid foundation)
