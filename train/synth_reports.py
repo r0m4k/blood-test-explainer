@@ -87,10 +87,56 @@ _LAYOUTS = [
     {"cols": ["test", "result", "unit", "ref"]},
     {"cols": ["test", "result", "ref", "flag"]},       # unit folded into result
     {"cols": ["test", "flag", "result", "unit", "ref"]},
+    {"cols": ["test", "result", "ref"]},               # minimal, no flag
+    {"cols": ["test", "result", "unit", "flag", "ref"]},
 ]
 _COL_LABEL = {"test": "Test", "result": "Result", "unit": "Units",
               "ref": "Reference Range", "flag": "Flag"}
 _FLAG_TEXT = {"low": "L", "high": "H", "normal": ""}
+
+# Palette themes: (header-band fill, accent text color) — diversity across "labs".
+_THEMES = [
+    ((243, 246, 250), (20, 28, 40)),
+    ((237, 244, 238), (24, 54, 36)),
+    ((245, 240, 248), (52, 28, 60)),
+    ((250, 245, 238), (70, 44, 16)),
+    ((255, 255, 255), (15, 15, 15)),   # plain / scanned look
+]
+_PANEL_TITLES = [
+    "Comprehensive Metabolic & Hematology Panel", "Laboratory Report",
+    "Blood Test Results", "Clinical Chemistry & CBC", "Pathology Report",
+]
+# Section headers (by category) are decorations the model must NOT extract as markers — this is
+# exactly the real-report failure where "BLOOD INDICES" got read as a marker.
+_SECTION_LABEL = {
+    "CBC": "Complete Blood Count (CBC)", "Metabolic": "Metabolic Panel",
+    "Liver": "Liver Function Tests", "Lipid": "Lipid Profile",
+    "Thyroid": "Thyroid Function", "Vitamin": "Vitamins & Iron Studies",
+}
+
+
+def _fmt_ref(marker: Marker, rng: random.Random) -> str:
+    """Reference ranges as real labs print them (varied separators / bounds / brackets)."""
+    lo, hi = marker.ref_low, marker.ref_high
+    if lo is not None and hi is not None:
+        sep = rng.choice([" - ", "-", " – ", " to "])
+        s = f"{_fmt_num(lo)}{sep}{_fmt_num(hi)}"
+        return f"[{s}]" if rng.random() < 0.12 else s
+    if hi is not None:
+        return rng.choice([f"< {_fmt_num(hi)}", f"<{_fmt_num(hi)}", f"Up to {_fmt_num(hi)}", f"0 - {_fmt_num(hi)}"])
+    if lo is not None:
+        return rng.choice([f"> {_fmt_num(lo)}", f">{_fmt_num(lo)}", f">= {_fmt_num(lo)}"])
+    return ""
+
+
+def _demo_line(rng: random.Random) -> str:
+    age, sex = rng.randint(19, 84), rng.choice(["Male", "Female", "M", "F"])
+    return rng.choice([
+        f"Patient: [SAMPLE]    Age/Sex: {age}/{sex}    Collected: 2026-03-14",
+        f"Name: [SAMPLE]   Age: {age} Years   Sex: {sex}",
+        f"[SAMPLE] · {age}{'M' if sex in ('Male', 'M') else 'F'} · Specimen: Serum",
+        "Patient: [SAMPLE]    DOB: [SAMPLE]    Collected: 2026-03-14",
+    ])
 
 
 def _make_report(rng: random.Random) -> tuple[list[dict], dict]:
@@ -102,22 +148,26 @@ def _make_report(rng: random.Random) -> tuple[list[dict], dict]:
         v = sample_value(rng, m)
         status = m.status_for(v)
         # Alias variety: sometimes use an alias as the printed name.
-        printed = rng.choice((m.name,) + m.aliases) if (m.aliases and rng.random() < 0.4) else m.name
+        printed = rng.choice((m.name,) + m.aliases) if (m.aliases and rng.random() < 0.45) else m.name
         tests.append({
             "marker": printed,
             "canonical": m.name,
+            "category": m.category,
             "value": _round_for(m, v),
             "unit": m.unit,
-            "reference_range": m.ref_range_text(),
+            "reference_range": _fmt_ref(m, rng),
             "status": status,
         })
     style = {
         "layout": rng.choice(_LAYOUTS),
         "lab": rng.choice(LAB_NAMES),
-        "stripe": rng.random() < 0.6,
+        "stripe": rng.random() < 0.55,
         "grid": rng.random() < 0.5,
-        "fold_unit": False,
-        "base": rng.randint(15, 17),
+        "sectioned": rng.random() < 0.55,
+        "theme": rng.choice(_THEMES),
+        "title": rng.choice(_PANEL_TITLES),
+        "demo": _demo_line(rng),
+        "base": rng.randint(14, 18),
     }
     return tests, style
 
@@ -142,6 +192,21 @@ def _fmt_num(v) -> str:
     return str(int(f)) if f.is_integer() else f"{f:g}"
 
 
+def _ordered_rows(tests: list[dict], sectioned: bool) -> list[tuple[str, object]]:
+    """Display rows. When sectioned, group markers by category under a section header (a
+    decoration that is NOT in the gold), teaching the model to skip such headers."""
+    if not sectioned:
+        return [("data", t) for t in tests]
+    by_cat: dict[str, list[dict]] = {}
+    for t in tests:
+        by_cat.setdefault(t["category"], []).append(t)
+    rows: list[tuple[str, object]] = []
+    for cat, items in by_cat.items():
+        rows.append(("section", _SECTION_LABEL.get(cat, cat)))
+        rows.extend(("data", t) for t in items)
+    return rows
+
+
 def render(tests: list[dict], style: dict) -> tuple[Image.Image, list[dict]]:
     """Render the report to an image; return (image, gold tests with source_text)."""
     cols = list(style["layout"]["cols"])
@@ -149,30 +214,31 @@ def render(tests: list[dict], style: dict) -> tuple[Image.Image, list[dict]]:
     W = 1000
     pad = 48
     base = style["base"]
+    band, accent = style["theme"]
     f_h1, f_h2, f_th, f_td = _font(30, True), _font(15), _font(14, True), _font(base)
+    f_sec = _font(base + 1, True)
 
     # Column widths (proportional, tuned per column type).
     weight = {"test": 0.34, "result": 0.18, "unit": 0.14, "ref": 0.26, "flag": 0.08}
     avail = W - 2 * pad
     widths = {c: int(avail * weight[c]) for c in cols}
-    # Normalize to fill width.
     scale = avail / sum(widths.values())
     widths = {c: int(w * scale) for c, w in widths.items()}
 
+    display = _ordered_rows(tests, style.get("sectioned", False))
     row_h = base + 16
     header_h = 150
     table_top = header_h + 30
-    H = table_top + row_h * (len(tests) + 1) + pad
+    H = table_top + row_h * (len(display) + 1) + pad
 
     img = Image.new("RGB", (W, H), "white")
     d = ImageDraw.Draw(img)
 
     # Header band.
-    d.rectangle([0, 0, W, header_h], fill=(243, 246, 250))
-    d.text((pad, 40), style["lab"], font=f_h1, fill=(20, 28, 40))
-    d.text((pad, 88), "Patient: [SAMPLE]    DOB: [SAMPLE]    Collected: 2026-03-14",
-           font=f_h2, fill=(90, 100, 115))
-    d.text((pad, 112), "Comprehensive Metabolic & Hematology Panel", font=f_h2, fill=(90, 100, 115))
+    d.rectangle([0, 0, W, header_h], fill=band)
+    d.text((pad, 40), style["lab"], font=f_h1, fill=accent)
+    d.text((pad, 88), style["demo"], font=f_h2, fill=(90, 100, 115))
+    d.text((pad, 112), style["title"], font=f_h2, fill=(90, 100, 115))
 
     # Column header row.
     x = pad
@@ -182,11 +248,16 @@ def render(tests: list[dict], style: dict) -> tuple[Image.Image, list[dict]]:
         x += widths[c]
     d.line([pad, y + row_h - 4, W - pad, y + row_h - 4], fill=(190, 200, 212), width=2)
 
-    # Rows.
+    # Rows (data + section decorations).
     gold = []
-    for i, t in enumerate(tests):
-        y = table_top + row_h * (i + 1)
-        if style["stripe"] and i % 2 == 1:
+    for di, (kind, payload) in enumerate(display, start=1):
+        y = table_top + row_h * di
+        if kind == "section":
+            d.rectangle([pad, y, W - pad, y + row_h], fill=(232, 237, 243))
+            d.text((pad + 6, y + 3), str(payload), font=f_sec, fill=accent)
+            continue
+        t = payload
+        if style["stripe"] and di % 2 == 1:
             d.rectangle([pad, y, W - pad, y + row_h], fill=(248, 250, 252))
         x = pad
         row_pieces = []
