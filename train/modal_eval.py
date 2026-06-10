@@ -118,3 +118,60 @@ def compare(
     out = Path("eval/before_after.json")
     out.write_text(json.dumps({"base": base, "finetuned": fine}, indent=2), encoding="utf-8")
     print(f"\n  wrote {out}  ->  render the chart with:  python eval/make_chart.py\n")
+
+
+@app.function(
+    image=image,
+    gpu="A100",
+    timeout=60 * 60,
+    volumes={"/root/.cache/huggingface": hf_cache},
+    secrets=[modal.Secret.from_name("huggingface-secret")],
+)
+def draft_labels(
+    pdf_dir_rel: str = "eval/data/real",
+    model_id: str = "openbmb/MiniCPM-V-4.6",
+    exclude: tuple[str, ...] = ("06_drlogy_cbc.pdf", "02_cbc_umc_johndoe.pdf"),
+) -> list[dict]:
+    """Run the BASE model over the real PDFs to produce DRAFT labels you then correct by hand.
+
+    Excludes the held-out eval reports so train/eval stay separate (no leakage).
+    """
+    import os
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, "/root/app")
+    os.environ["ZEROGPU_QUANTIZE"] = "0"
+    from src.extraction.zerogpu_transformers import ZeroGPUTransformersExtractor
+
+    pdf_dir = Path("/root/app") / pdf_dir_rel
+    extractor = ZeroGPUTransformersExtractor(model_id=model_id)
+    drafts: list[dict] = []
+    for pdf in sorted(pdf_dir.glob("*.pdf")):
+        if pdf.name in exclude:
+            continue
+        try:
+            tests = extractor.extract(str(pdf), max_pages=3).tests
+            print(f"{pdf.name}: {len(tests)} draft markers")
+        except Exception as error:
+            print(f"{pdf.name}: FAILED — {error}")
+            tests = []
+        drafts.append({"image": pdf.name, "tests": tests, "notes": []})
+    return drafts
+
+
+@app.local_entrypoint()
+def label(pdf_dir: str = "eval/data/real", out: str = "eval/data/real/labels_train_draft.jsonl") -> None:
+    """Generate draft labels (base model) for you to correct, then mix into training."""
+    import json
+    from pathlib import Path
+
+    drafts = draft_labels.remote(pdf_dir_rel=pdf_dir)
+    out_path = Path(out)
+    with out_path.open("w", encoding="utf-8") as fh:
+        for row in drafts:
+            fh.write(json.dumps(row, ensure_ascii=False) + "\n")
+    print(f"\n  Wrote {len(drafts)} DRAFT labels -> {out_path}")
+    print("  Correct each line (fix marker/value/unit/status, delete junk rows), save it as")
+    print("  eval/data/real/labels_train.jsonl, then retrain with the real mix-in:")
+    print("    modal run train/modal_finetune.py::main --real-labels eval/data/real/labels_train.jsonl\n")

@@ -45,10 +45,60 @@ image = (
     # Mount our generator + converter + marker reference so the box builds its own data.
     .add_local_dir("src", "/root/app/src")
     .add_local_dir("train", "/root/app/train")
+    .add_local_dir("eval", "/root/app/eval")  # real PDFs + corrected labels for the real mix-in
 )
 
 adapters = modal.Volume.from_name("blood-test-adapters", create_if_missing=True)
 hf_cache = modal.Volume.from_name("blood-test-hf-cache", create_if_missing=True)
+
+
+def _append_real_sft(real_labels_path, sft_path, repeat: int) -> int:
+    """Render real report PDFs to PNG and append oversampled SFT rows to the synthetic dataset.
+
+    Runs on the Modal box (fitz/pymupdf + the app prompt are available there). Oversampling gives a
+    handful of real reports enough weight to anchor the model against ~2000 synthetic samples — the
+    lever that synthetic-only training could not clear.
+    """
+    import json
+    import sys
+    from pathlib import Path
+
+    import fitz  # pymupdf
+
+    sys.path.insert(0, "/root/app")
+    from src.openbmb_client import EXTRACTION_PROMPT
+
+    real_labels_path = Path(real_labels_path)
+    if not real_labels_path.exists():
+        print(f"real labels not found: {real_labels_path} — skipping real mix-in")
+        return 0
+    rows = [json.loads(ln) for ln in real_labels_path.read_text(encoding="utf-8").splitlines() if ln.strip()]
+    labels_dir = real_labels_path.parent
+    png_dir = Path("/root/app/train/data/real_png")
+    png_dir.mkdir(parents=True, exist_ok=True)
+
+    written = 0
+    with sft_path.open("a", encoding="utf-8") as fh:
+        for row in rows:
+            src = labels_dir / row["image"]
+            if not src.exists():
+                continue
+            png = png_dir / (Path(row["image"]).stem + ".png")
+            doc = fitz.open(str(src))
+            doc[0].get_pixmap(dpi=150).save(str(png))  # page 0 — lab reports are typically 1 page
+            doc.close()
+            target = json.dumps({"tests": row.get("tests", []), "notes": row.get("notes", [])}, ensure_ascii=False)
+            example = json.dumps({
+                "messages": [
+                    {"role": "user", "content": "<image>\n" + EXTRACTION_PROMPT},
+                    {"role": "assistant", "content": target},
+                ],
+                "images": [str(png.resolve())],
+            }, ensure_ascii=False)
+            for _ in range(repeat):
+                fh.write(example + "\n")
+                written += 1
+    return written
 
 
 @app.function(
@@ -57,7 +107,7 @@ hf_cache = modal.Volume.from_name("blood-test-hf-cache", create_if_missing=True)
     timeout=6 * 60 * 60,
     volumes={"/adapters": adapters, "/root/.cache/huggingface": hf_cache},
 )
-def train(n: int = 2000, epochs: int = 1, lr: float = 2e-5, seed: int = 13) -> str:
+def train(n: int = 2000, epochs: int = 1, lr: float = 2e-5, real_labels: str | None = None, real_repeat: int = 50, seed: int = 13) -> str:
     import os
     import subprocess
     import sys
@@ -72,7 +122,13 @@ def train(n: int = 2000, epochs: int = 1, lr: float = 2e-5, seed: int = 13) -> s
     labels = generate(n, data_dir, seed=seed)
     sft_path = Path("/root/app/train/data/sft.jsonl")
     n_examples = convert(labels, sft_path)
-    print(f"Generated {n_examples} SFT examples at {sft_path}")
+    print(f"Generated {n_examples} synthetic SFT examples at {sft_path}")
+
+    # 1b) Mix in REAL labeled reports (oversampled) so the model anchors to real layouts — the
+    # lever synthetic-only training could not clear. real_labels = a corrected labels JSONL.
+    if real_labels:
+        n_real = _append_real_sft(Path("/root/app") / real_labels, sft_path, real_repeat)
+        print(f"Mixed {n_real} real SFT rows ({real_repeat}x oversample of each report)")
 
     # 2) LoRA fine-tune with ms-swift
     out_dir = "/adapters/minicpmv-lab-lora"
@@ -109,8 +165,8 @@ def train(n: int = 2000, epochs: int = 1, lr: float = 2e-5, seed: int = 13) -> s
 
 
 @app.local_entrypoint()
-def main(n: int = 2000, epochs: int = 1, lr: float = 2e-5) -> None:
-    path = train.remote(n=n, epochs=epochs, lr=lr)
+def main(n: int = 2000, epochs: int = 1, lr: float = 2e-5, real_labels: str | None = None, real_repeat: int = 50) -> None:
+    path = train.remote(n=n, epochs=epochs, lr=lr, real_labels=real_labels, real_repeat=real_repeat)
     print(f"\nLoRA adapters saved to Modal volume 'blood-test-adapters' at {path}")
     print("Next: merge the adapter into the base model and push it to the Hub:")
     print("  modal run train/modal_finetune.py::merge --repo-id <owner>/<model-name>")
