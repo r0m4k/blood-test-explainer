@@ -1,10 +1,11 @@
 """Extraction backends behind one interface.
 
 `build_extractor()` returns the right backend for the environment:
-  - **local** (off-grid): fine-tuned MiniCPM-V as GGUF under llama.cpp, fully on-device.
-  - **api**: the original OpenBMB hosted endpoint (kept as a dev fallback only).
+  - **zerogpu** / **auto**: official OpenBMB MiniCPM-V through Transformers on HF ZeroGPU.
+  - **local**: local llama-server / llama.cpp backends for local experimentation.
+  - **api**: the original OpenBMB hosted endpoint, kept as a dev fallback only.
 
-Default is `auto`: use local when a GGUF is configured + llama.cpp is importable, else api.
+Default is `auto`, which resolves to the ZeroGPU Transformers backend for the Space.
 """
 
 from src.extraction.base import Extractor, ExtractionResult
