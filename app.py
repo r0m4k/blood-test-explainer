@@ -14,8 +14,8 @@ from src.report_pipeline import build_health_report
 
 load_local_env()
 
-# The hosted-API key field is only relevant when the API backend is active; in offline
-# (local) modes it's dead weight, so we only show it when EXTRACTOR_BACKEND == "api".
+# The hosted API key field is only relevant when the API backend is active. The current Space
+# path is ZeroGPU, so users should not see model/API configuration controls.
 _API_MODE = os.getenv("EXTRACTOR_BACKEND", "auto").strip().lower() == "api"
 
 

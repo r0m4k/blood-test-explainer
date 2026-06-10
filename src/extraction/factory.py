@@ -1,12 +1,10 @@
 """Backend selection.
 
 `EXTRACTOR_BACKEND` env:
-  - `auto` (default): local-server if LLAMA_SERVER_URL is set; else the in-process llama.cpp
-    backend if a GGUF + llama-cpp-python are available; else the hosted API.
-  - `local` / `server`: the offline **llama-server** backend (the path that works for MiniCPM-V
-    4.6). Run `llama-server -m model.gguf --mmproj mmproj.gguf --port 8080` alongside the app.
-  - `llamacpp`: in-process llama-cpp-python (only once it supports the model build).
-  - `api`: the hosted OpenBMB endpoint (dev fallback only).
+  - `auto` / `zerogpu` (default): HF ZeroGPU + official OpenBMB Transformers model.
+  - `api`: hosted OpenBMB endpoint (dev fallback only).
+  - `local` / `server`: local llama-server backend for local development.
+  - `llamacpp`: in-process llama-cpp-python backend for local development.
 """
 
 from __future__ import annotations
@@ -16,6 +14,7 @@ import os
 from src.extraction.base import Extractor
 from src.extraction.local_minicpmv import LocalMiniCPMVExtractor
 from src.extraction.local_server import LocalServerExtractor
+from src.extraction.zerogpu_transformers import ZeroGPUTransformersExtractor
 from src.openbmb_client import OpenBMBExtractor
 
 
@@ -26,22 +25,15 @@ def build_extractor(
 ) -> Extractor:
     backend = os.getenv("EXTRACTOR_BACKEND", "auto").strip().lower()
 
+    if backend in ("auto", "zerogpu", "zero-gpu", "transformers"):
+        return ZeroGPUTransformersExtractor(model_id=model)
     if backend == "api":
         return OpenBMBExtractor(api_url=api_url, model=model, api_key=api_key)
     if backend in ("local", "server", "local-server"):
         return LocalServerExtractor()
     if backend == "llamacpp":
         return LocalMiniCPMVExtractor()
-
-    # auto
-    if os.getenv("LLAMA_SERVER_URL"):
-        return LocalServerExtractor()
-    if _llamacpp_available():
-        try:
-            return LocalMiniCPMVExtractor()
-        except Exception:
-            pass
-    return OpenBMBExtractor(api_url=api_url, model=model, api_key=api_key)
+    raise ValueError(f"Unknown EXTRACTOR_BACKEND: {backend}")
 
 
 def _llamacpp_available() -> bool:
