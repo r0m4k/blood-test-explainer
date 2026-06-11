@@ -11,7 +11,7 @@ This replaced the Docker + `llama-server` path because ZeroGPU is only available
 | Space SDK | `gradio` |
 | Hardware | ZeroGPU |
 | Badge-target runtime | `llama.cpp` through `llama-cpp-python` |
-| Badge-target backend | `EXTRACTOR_BACKEND=llamacpp-gpu` |
+| Badge-target backend | `EXTRACTOR_BACKEND=auto` or `EXTRACTOR_BACKEND=llamacpp-gpu` |
 | Fallback backend | `EXTRACTOR_BACKEND=zerogpu` with Transformers |
 | Model variables | `LLAMACPP_GGUF_REPO`, `LLAMACPP_MODEL_FILE`, `LLAMACPP_MMPROJ_FILE` |
 | Extraction backends | `src/extraction/llamacpp_gpu.py`, `src/extraction/zerogpu_transformers.py` |
@@ -23,8 +23,8 @@ Do not switch the Space back to Docker unless the project intentionally gives up
 
 `EXTRACTOR_BACKEND`:
 
-- `auto`: default, uses ZeroGPU Transformers as the safest startup path.
-- `llamacpp-gpu`: badge-target path, runs GGUF through `llama.cpp` inside `@spaces.GPU`.
+- `auto`: default badge-target path, runs GGUF through `llama.cpp` inside `@spaces.GPU`.
+- `llamacpp-gpu`: explicit alias for the same badge-target path.
 - `zerogpu`: force the ZeroGPU Transformers fallback backend.
 - `api`: hosted OpenBMB endpoint for development fallback only.
 - `local` / `server` / `llamacpp`: local experimental backends, not the active HF Space path.
@@ -63,10 +63,10 @@ Both ZeroGPU backends use `@spaces.GPU(duration=120)` for the model generation c
 
 ## Current Model
 
-Badge-target Space variables:
+Badge-target defaults:
 
 ```bash
-EXTRACTOR_BACKEND=llamacpp-gpu
+EXTRACTOR_BACKEND=auto
 LLAMACPP_GGUF_REPO=openbmb/MiniCPM-V-4.6-gguf
 LLAMACPP_MODEL_FILE=MiniCPM-V-4_6-Q4_K_M.gguf
 LLAMACPP_MMPROJ_FILE=mmproj-model-f16.gguf
@@ -110,7 +110,7 @@ For local extraction testing with the same backend:
 
 ```bash
 pip install -r requirements.txt
-EXTRACTOR_BACKEND=zerogpu python app.py
+EXTRACTOR_BACKEND=auto python app.py
 ```
 
 Local machines without a suitable GPU may be slow or may not have enough memory for full model inference. In that case, test UI/report rendering locally and test extraction on the HF ZeroGPU Space.

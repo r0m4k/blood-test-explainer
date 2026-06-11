@@ -40,7 +40,7 @@ The badge-target model path is the official OpenBMB GGUF repo running through ll
 LLAMACPP_GGUF_REPO=openbmb/MiniCPM-V-4.6-gguf
 LLAMACPP_MODEL_FILE=MiniCPM-V-4_6-Q4_K_M.gguf
 LLAMACPP_MMPROJ_FILE=mmproj-model-f16.gguf
-EXTRACTOR_BACKEND=llamacpp-gpu
+EXTRACTOR_BACKEND=auto
 ```
 
 The backend lives in:
@@ -102,7 +102,7 @@ Local development can run the same backend, although the model may be slow or to
 
 ```bash
 pip install -r requirements.txt
-EXTRACTOR_BACKEND=llamacpp-gpu python app.py
+EXTRACTOR_BACKEND=auto python app.py
 ```
 
 For quick UI-only work, continue using the static reference report without triggering extraction.
