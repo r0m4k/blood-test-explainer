@@ -74,3 +74,7 @@ and only insert the fine-tuned GGUF repository/path into the `LLAMACPP_*` variab
 pip install -r requirements.txt
 EXTRACTOR_BACKEND=auto python app.py
 ```
+
+The Space runtime is intentionally slim. The Transformers fallback stack is kept out of the
+default Space dependency set so the build stays faster and more deterministic. Install any
+extra backend-specific packages only when you actually need to run that backend locally.

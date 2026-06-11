@@ -52,12 +52,11 @@ Install dependencies from `requirements.txt`, including:
 ```text
 spaces
 llama-cpp-python
-transformers[torch]>=5.7.0
-torch
-torchvision
-av
-accelerate
 ```
+
+The Space build intentionally excludes the heavier Transformers fallback stack from the default
+runtime requirements so the Hugging Face build stays fast. Add backend-specific extras only when
+you are explicitly working on that backend locally.
 
 Both ZeroGPU backends use `@spaces.GPU(duration=120)` for the model generation call.
 
