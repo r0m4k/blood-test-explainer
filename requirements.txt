@@ -10,3 +10,8 @@ torch
 torchvision
 av
 transformers[torch]>=5.7.0
+
+# Llama Champion path: run the official OpenBMB GGUF through llama.cpp on ZeroGPU.
+# The extra index provides prebuilt CUDA wheels so the Space does not compile llama.cpp.
+--extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121
+llama-cpp-python==0.3.16

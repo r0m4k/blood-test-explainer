@@ -2,6 +2,7 @@
 
 `EXTRACTOR_BACKEND` env:
   - `auto` / `zerogpu` (default): HF ZeroGPU + official OpenBMB Transformers model.
+  - `llamacpp-gpu` / `llama-champion`: HF ZeroGPU + llama.cpp GGUF badge path.
   - `api`: hosted OpenBMB endpoint (dev fallback only).
   - `local` / `server`: local llama-server backend for local development.
   - `llamacpp`: in-process llama-cpp-python backend for local development.
