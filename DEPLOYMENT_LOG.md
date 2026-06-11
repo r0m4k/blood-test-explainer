@@ -15,7 +15,7 @@ What changed:
 - `README.md` metadata changed from `sdk: docker` to `sdk: gradio`.
 - `DEPLOY.md` and `RUNBOOK.md` now describe Gradio + ZeroGPU + Transformers as the active path.
 - `src/extraction/zerogpu_transformers.py` adds the official OpenBMB MiniCPM-V Transformers backend.
-- `src/extraction/factory.py` now resolves `auto` to the ZeroGPU backend.
+- `src/extraction/factory.py` initially resolved `auto` to the ZeroGPU Transformers backend.
 - Docker-only files (`Dockerfile`, `start.sh`, `.dockerignore`) were removed from the active deployment.
 
 Current model:
@@ -37,7 +37,7 @@ Do not reintroduce Docker or `llama-server` while the project is targeting ZeroG
 ## 2026-06-11 — Add llama.cpp badge path on ZeroGPU
 
 Decision: keep the Space as **Gradio ZeroGPU**, but target the hackathon llama.cpp badge with the
-`llamacpp-gpu` backend.
+`auto` / `llamacpp-gpu` backend.
 
 Why:
 
@@ -47,10 +47,10 @@ Why:
 - The official OpenBMB GGUF repo stays outside the Space git repo and is downloaded through the
   Hugging Face cache at runtime.
 
-Current badge-target variables:
+Current badge-target defaults:
 
 ```bash
-EXTRACTOR_BACKEND=llamacpp-gpu
+EXTRACTOR_BACKEND=auto
 LLAMACPP_GGUF_REPO=openbmb/MiniCPM-V-4.6-gguf
 LLAMACPP_MODEL_FILE=MiniCPM-V-4_6-Q4_K_M.gguf
 LLAMACPP_MMPROJ_FILE=mmproj-model-f16.gguf
