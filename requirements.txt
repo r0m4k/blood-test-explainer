@@ -12,6 +12,5 @@ av
 transformers[torch]>=5.7.0
 
 # Llama Champion path: run the official OpenBMB GGUF through llama.cpp on ZeroGPU.
-# The extra index provides prebuilt CUDA wheels so the Space does not compile llama.cpp.
---extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121
-llama-cpp-python==0.3.16
+# Use a build that includes MiniCPM-V 4.6 mtmd support.
+llama-cpp-python @ git+https://github.com/JamePeng/llama-cpp-python.git

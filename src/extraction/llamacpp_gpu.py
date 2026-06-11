@@ -127,10 +127,20 @@ def _run_llamacpp_generation(
     max_tokens: int,
 ) -> str:
     model_path, mmproj_path = _download(repo, model_file, mmproj_file)
-    llm = _load(model_path, mmproj_path, chat_handler)
+    try:
+        llm = _load(model_path, mmproj_path, chat_handler)
+    except Exception as exc:
+        raise RuntimeError(
+            "The llama.cpp backend could not load the MiniCPM-V GGUF/mmproj pair. "
+            "This usually means the downloaded model build is incompatible with the installed "
+            "llama-cpp-python wheel, the chat handler name does not match the wheel, or one of "
+            "the model files is incomplete."
+        ) from exc
     response = llm.create_chat_completion(
         messages=[{"role": "user", "content": [{"type": "text", "text": EXTRACTION_PROMPT}, *parts]}],
+        response_format={"type": "json_object"},
         temperature=0.0,
+        reasoning_budget=0,
         max_tokens=max_tokens,
     )
     return response["choices"][0]["message"].get("content") or "{}"

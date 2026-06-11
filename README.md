@@ -49,7 +49,8 @@ The Hugging Face Space is intentionally deployed as a **Gradio ZeroGPU Space**. 
 deployment path.
 
 The badge-target backend runs the official OpenBMB MiniCPM-V 4.6 GGUF through `llama.cpp`
-(`llama-cpp-python`) inside a ZeroGPU-managed function. The deterministic knowledge-graph
+inside a ZeroGPU-managed function, using a `llama-cpp-python` build that includes MiniCPM-V 4.6
+mtmd support. The deterministic knowledge-graph
 enrichment and UI rendering stay in normal Gradio/Python code.
 
 This workflow should not be further changed back to Docker unless the project intentionally gives up
