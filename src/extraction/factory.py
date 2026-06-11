@@ -1,8 +1,8 @@
 """Backend selection.
 
 `EXTRACTOR_BACKEND` env:
-  - `auto` / `zerogpu` (default): HF ZeroGPU + official OpenBMB Transformers model.
-  - `llamacpp-gpu` / `llama-champion`: HF ZeroGPU + llama.cpp GGUF badge path.
+  - `auto` / `llamacpp-gpu` / `llama-champion`: HF ZeroGPU + llama.cpp GGUF badge path.
+  - `zerogpu` / `transformers`: HF ZeroGPU + official OpenBMB Transformers fallback.
   - `api`: hosted OpenBMB endpoint (dev fallback only).
   - `local` / `server`: local llama-server backend for local development.
   - `llamacpp`: in-process llama-cpp-python backend for local development.
@@ -27,11 +27,11 @@ def build_extractor(
 ) -> Extractor:
     backend = os.getenv("EXTRACTOR_BACKEND", "auto").strip().lower()
 
-    if backend in ("auto", "zerogpu", "zero-gpu", "transformers"):
-        return ZeroGPUTransformersExtractor(model_id=model)
-    if backend in ("llamacpp-gpu", "gpu-llamacpp", "llama-champion"):
+    if backend in ("auto", "llamacpp-gpu", "gpu-llamacpp", "llama-champion"):
         # llama.cpp on the ZeroGPU GPU -> earns the Llama Champion badge while staying off-grid.
         return LlamaCppGPUExtractor()
+    if backend in ("zerogpu", "zero-gpu", "transformers"):
+        return ZeroGPUTransformersExtractor(model_id=model)
     if backend == "api":
         return OpenBMBExtractor(api_url=api_url, model=model, api_key=api_key)
     if backend in ("local", "server", "local-server"):

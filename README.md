@@ -56,7 +56,7 @@ This workflow should not be further changed back to Docker unless the project in
 ZeroGPU. When the fine-tuned GGUF model is ready, only replace the model variables:
 
 ```bash
-EXTRACTOR_BACKEND=llamacpp-gpu
+EXTRACTOR_BACKEND=auto
 LLAMACPP_GGUF_REPO=openbmb/MiniCPM-V-4.6-gguf
 LLAMACPP_MODEL_FILE=MiniCPM-V-4_6-Q4_K_M.gguf
 LLAMACPP_MMPROJ_FILE=mmproj-model-f16.gguf
@@ -71,5 +71,5 @@ and only insert the fine-tuned GGUF repository/path into the `LLAMACPP_*` variab
 
 ```bash
 pip install -r requirements.txt
-EXTRACTOR_BACKEND=llamacpp-gpu python app.py
+EXTRACTOR_BACKEND=auto python app.py
 ```
