@@ -10,7 +10,7 @@ This replaced the Docker + `llama-server` path because ZeroGPU is only available
 |---|---|
 | Space SDK | `gradio` |
 | Hardware | ZeroGPU |
-| Badge-target runtime | `llama.cpp` through `llama-cpp-python` |
+| Badge-target runtime | `llama.cpp` through a `llama-cpp-python` build with MiniCPM-V 4.6 support |
 | Badge-target backend | `EXTRACTOR_BACKEND=auto` or `EXTRACTOR_BACKEND=llamacpp-gpu` |
 | Fallback backend | `EXTRACTOR_BACKEND=zerogpu` with Transformers |
 | Model variables | `LLAMACPP_GGUF_REPO`, `LLAMACPP_MODEL_FILE`, `LLAMACPP_MMPROJ_FILE` |

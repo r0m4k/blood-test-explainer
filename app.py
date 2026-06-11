@@ -2,13 +2,14 @@ from __future__ import annotations
 
 import os
 import re
+import traceback
 from html import escape
 from typing import Any
 
 import gradio as gr
 
-from src.local_env import load_local_env
 from src.extraction import build_extractor
+from src.local_env import load_local_env
 from src.report_pipeline import build_health_report
 
 
@@ -21,12 +22,13 @@ _API_MODE = os.getenv("EXTRACTOR_BACKEND", "auto").strip().lower() == "api"
 
 def extract_lab_values(
     uploaded_file: str | None,
-) -> tuple[str, str, Any]:
+) -> tuple[str, str, Any, str]:
     if not uploaded_file:
         return (
             _status_html("Waiting for a document", "Upload a lab report to begin extraction."),
             empty_report_html("No document uploaded", "Choose a file first, then run extraction again."),
             gr.update(visible=True),
+            workflow_phase_html("ready"),
         )
 
     extractor = build_extractor()
@@ -34,10 +36,12 @@ def extract_lab_values(
     try:
         result = extractor.extract(uploaded_file)
     except Exception as error:
+        detail = _format_extraction_error(error)
         return (
-            _status_html("Extraction failed", str(error), tone="danger"),
-            empty_report_html("Extraction failed", "The model response could not be converted into a report."),
+            _status_html("Extraction failed", detail, tone="danger"),
+            empty_report_html("Extraction failed", detail),
             gr.update(visible=True),
+            workflow_phase_html("ready"),
         )
 
     health_report = build_health_report(result)
@@ -62,6 +66,7 @@ def extract_lab_values(
         _status_html("Extraction complete", status_text),
         report_html(health_report),
         gr.update(visible=True),
+        workflow_phase_html("done"),
     )
 
 
@@ -74,11 +79,91 @@ def _status_html(title: str, detail: str, tone: str = "success") -> str:
     """
 
 
-def show_processing() -> tuple[str, Any, str]:
+def _format_extraction_error(error: Exception) -> str:
+    primary = _sanitize_error_message(error)
+    lowered = primary.lower()
+    if "failed to load model from file" in lowered:
+        return (
+            "The llama.cpp backend could not load the GGUF model. That points to a model/runtime "
+            "compatibility issue, not a background worker problem."
+        )
+    if "401" in lowered or "unauthorized" in lowered:
+        return (
+            "The OpenBMB endpoint rejected the request. Check the API key or switch to the local "
+            "ZeroGPU path."
+        )
+    if "could not be converted into a report" in lowered:
+        return "The model produced output, but it could not be parsed into the extraction schema."
+    return primary
+
+
+def _sanitize_error_message(error: Exception) -> str:
+    message = str(error).strip()
+    if not message:
+        message = error.__class__.__name__
+    if os.getenv("BTE_DEBUG_ERRORS", "0") == "1":
+        tb = "".join(traceback.TracebackException.from_exception(error).format()).strip()
+        return f"{message}\n\n{tb}"
+    return message
+
+
+def workflow_phase_html(phase: str) -> str:
+    phase = phase if phase in {"ready", "processing", "done"} else "ready"
+    return f"""
+    <div class="bte-workflow-phase-marker" data-phase="{escape(phase)}" aria-hidden="true"></div>
+    """
+
+
+def _display_status_label(status: str) -> str:
+    normalized = (status or "").strip().lower()
+    if normalized == "bad":
+        return "Low"
+    return normalized.title() if normalized else "Unknown"
+
+
+def workflow_arrow_html(kind: str) -> str:
+    kind = kind if kind in {"upload", "report"} else "upload"
+    if kind == "upload":
+        svg = """
+        <svg viewBox="0 0 160 420" aria-hidden="true" focusable="false">
+          <defs>
+            <linearGradient id="bte-arrow-upload" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#67e8f9"/>
+              <stop offset="48%" stop-color="#2563eb"/>
+              <stop offset="100%" stop-color="#22c55e"/>
+            </linearGradient>
+          </defs>
+          <path d="M136 22 C70 58, 34 120, 34 200 C34 276, 63 332, 108 376" fill="none" stroke="url(#bte-arrow-upload)" stroke-width="8" stroke-linecap="round"/>
+          <path d="M108 376 L86 360 M108 376 L102 349" fill="none" stroke="url(#bte-arrow-upload)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        """
+    else:
+        svg = """
+        <svg viewBox="0 0 220 180" aria-hidden="true" focusable="false">
+          <defs>
+            <linearGradient id="bte-arrow-report" x1="0%" y1="0%" x2="100%" y2="100%">
+              <stop offset="0%" stop-color="#67e8f9"/>
+              <stop offset="48%" stop-color="#2563eb"/>
+              <stop offset="100%" stop-color="#22c55e"/>
+            </linearGradient>
+          </defs>
+          <path d="M110 14 C110 52, 110 86, 110 126" fill="none" stroke="url(#bte-arrow-report)" stroke-width="8" stroke-linecap="round"/>
+          <path d="M110 126 L89 106 M110 126 L132 106" fill="none" stroke="url(#bte-arrow-report)" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+        """
+    return f"""
+    <div class="bte-workflow-arrow-svg bte-workflow-arrow-svg--{escape(kind)}" aria-hidden="true">
+      {svg}
+    </div>
+    """
+
+
+def show_processing() -> tuple[str, Any, str, str]:
     return (
         _status_html("Reading document", "Extracting patient context and markers, then matching them to the knowledge graph.", tone="loading"),
         gr.update(visible=True),
         loading_report_html(),
+        workflow_phase_html("processing"),
     )
 
 
@@ -87,12 +172,14 @@ def upload_state(uploaded_file: str | None) -> tuple[Any, Any]:
         return (
             gr.update(visible=True),
             gr.update(visible=False, value=selected_document_html()),
+            workflow_phase_html("ready"),
         )
 
     filename = os.path.basename(uploaded_file)
     return (
         gr.update(visible=False),
         gr.update(visible=True, value=selected_document_html(filename)),
+        workflow_phase_html("processing"),
     )
 
 
@@ -188,7 +275,7 @@ def result_preview_html() -> str:
               <span>Hemoglobin</span>
               <strong>Normal</strong>
             </div>
-            <div class="bte-mini-card bte-mini-card--amber">
+            <div class="bte-mini-card bte-mini-card--red">
               <span>Vitamin D</span>
               <strong>Low</strong>
             </div>
@@ -206,131 +293,18 @@ def result_preview_html() -> str:
     """
 
 
-def ideal_document_example_html() -> str:
-    tests = [
-        {
-            "marker": "Hemoglobin",
-            "value": "14.2",
-            "unit": "g/dL",
-            "status": "ideal",
-            "range_position": "76",
-            "summary": "Oxygen-carrying protein in red blood cells.",
-            "importance": "Helps show whether your blood can transport oxygen efficiently and can point toward anemia or dehydration patterns.",
-            "improve": "Maintain iron-rich foods, B12, folate, and steady protein intake. Review heavy fatigue or shortness of breath with a clinician.",
-        },
-        {
-            "marker": "Ferritin",
-            "value": "78",
-            "unit": "ng/mL",
-            "status": "ideal",
-            "range_position": "72",
-            "summary": "Stored iron available for future red blood cell production.",
-            "importance": "Low ferritin can appear before hemoglobin drops and may affect energy, hair shedding, endurance, and recovery.",
-            "improve": "Pair iron foods with vitamin C, avoid tea or coffee directly around iron-heavy meals, and confirm supplementation needs clinically.",
-        },
-        {
-            "marker": "HDL Cholesterol",
-            "value": "68",
-            "unit": "mg/dL",
-            "status": "ideal",
-            "range_position": "80",
-            "summary": "Protective cholesterol involved in reverse cholesterol transport.",
-            "importance": "Higher HDL in context can reflect stronger cardiometabolic resilience, especially alongside healthy triglycerides.",
-            "improve": "Prioritize aerobic training, olive oil, nuts, fatty fish, fiber, and sleep consistency.",
-        },
-        {
-            "marker": "Vitamin D",
-            "value": "34",
-            "unit": "ng/mL",
-            "status": "normal",
-            "range_position": "53",
-            "summary": "Fat-soluble hormone-like vitamin linked to bone, immune, and muscle function.",
-            "importance": "A normal value may still be worth optimizing depending on season, symptoms, diet, and sun exposure.",
-            "improve": "Use safe sun exposure, vitamin D-rich foods, and discuss dose and recheck timing before supplementing heavily.",
-        },
-        {
-            "marker": "Fasting Glucose",
-            "value": "92",
-            "unit": "mg/dL",
-            "status": "normal",
-            "range_position": "58",
-            "summary": "Blood sugar level after an overnight fast.",
-            "importance": "Useful for spotting glucose regulation trends, especially when viewed with HbA1c, insulin, and triglycerides.",
-            "improve": "Walk after meals, lift weights, increase fiber, reduce liquid sugar, and keep sleep timing stable.",
-        },
-        {
-            "marker": "Triglycerides",
-            "value": "184",
-            "unit": "mg/dL",
-            "status": "bad",
-            "range_position": "88",
-            "summary": "Circulating blood fats strongly affected by diet, alcohol, insulin sensitivity, and recent intake.",
-            "importance": "High triglycerides can signal cardiometabolic stress and should be interpreted with HDL, glucose, liver markers, and context.",
-            "improve": "Reduce refined carbohydrates and alcohol, add omega-3 rich fish, build regular zone-2 cardio, and recheck fasting values.",
-        },
-    ]
-
-    left_cards = "\n".join(_ideal_marker_card(test) for index, test in enumerate(tests) if index % 2 == 0)
-    right_cards = "\n".join(_ideal_marker_card(test) for index, test in enumerate(tests) if index % 2 == 1)
-
-    return f"""
-    <section class="bte-ideal-doc">
-      <header class="bte-ideal-hero">
-        <div>
-          <p class="bte-kicker">Ideal document example</p>
-          <h2>Final health report reference</h2>
-          <p>This static example shows the kind of rich, explanatory document the agent should eventually generate from a raw lab upload.</p>
-        </div>
-      </header>
-
-      <input class="bte-ideal-filter" type="radio" name="bte-ideal-filter" id="bte-filter-total" checked>
-      <input class="bte-ideal-filter" type="radio" name="bte-ideal-filter" id="bte-filter-ideal">
-      <input class="bte-ideal-filter" type="radio" name="bte-ideal-filter" id="bte-filter-normal">
-      <input class="bte-ideal-filter" type="radio" name="bte-ideal-filter" id="bte-filter-bad">
-
-      <div class="bte-ideal-stats">
-        <label class="bte-ideal-stat bte-ideal-stat--total" for="bte-filter-total">
-          <span>6</span>
-          <strong>Total tests</strong>
-        </label>
-        <label class="bte-ideal-stat bte-ideal-stat--ideal" for="bte-filter-ideal">
-          <span>3</span>
-          <strong>Ideal</strong>
-        </label>
-        <label class="bte-ideal-stat bte-ideal-stat--normal" for="bte-filter-normal">
-          <span>2</span>
-          <strong>Normal</strong>
-        </label>
-        <label class="bte-ideal-stat bte-ideal-stat--bad" for="bte-filter-bad">
-          <span>1</span>
-          <strong>Bad</strong>
-        </label>
-      </div>
-
-      <div class="bte-ideal-grid">
-        <div class="bte-ideal-column">
-          {left_cards}
-        </div>
-        <div class="bte-ideal-column">
-          {right_cards}
-        </div>
-      </div>
-    </section>
-    """
-
-
 def _ideal_marker_card(test: dict[str, str]) -> str:
     status = test["status"]
     range_position_value = test.get("range_position", "50")
     range_position = escape(range_position_value)
-    range_labels = test.get("range_labels", ("Bad", "Normal", "Good"))
+    range_labels = test.get("range_labels", ("Low", "Normal", "Good"))
     low_label, mid_label, high_label = (escape(label) for label in range_labels)
     return f"""
     <article class="bte-ideal-marker bte-ideal-marker--{escape(status)}">
       <div class="bte-ideal-marker-head">
         <div class="bte-ideal-title-line">
           <h3>{escape(test["marker"])}</h3>
-          <span class="bte-ideal-status">{escape(status.title())}</span>
+          <span class="bte-ideal-status">{escape(_display_status_label(status))}</span>
         </div>
         <div class="bte-range-scale" style="--value-position: {range_position}%; --value-position-number: {range_position}">
           <div class="bte-range-value">
@@ -387,8 +361,8 @@ def report_html(report: dict[str, Any]) -> str:
     <section class="bte-ideal-doc bte-final-report">
       <header class="bte-ideal-hero">
         <div>
-          <p class="bte-kicker">Final health report</p>
-          <h2>Final health report reference</h2>
+          <p class="bte-kicker">Blood test report</p>
+          <h2>Blood Test Report</h2>
           <p>Generated from the uploaded lab report, matched to the knowledge graph, and enriched with age and sex context. {escape(patient_context)}</p>
         </div>
       </header>
@@ -413,7 +387,7 @@ def report_html(report: dict[str, Any]) -> str:
         </label>
         <label class="bte-ideal-stat bte-ideal-stat--bad" for="bte-final-filter-bad">
           <span>{bad}</span>
-          <strong>Bad</strong>
+          <strong>Low</strong>
         </label>
       </div>
 
@@ -488,7 +462,7 @@ def _marker_card(test: dict[str, Any]) -> str:
           <strong>{escape(value)}</strong>
           <small>{escape(unit)}</small>
         </span>
-        <span class="bte-marker-status">{escape(status.title())}</span>
+          <span class="bte-marker-status">{escape(_display_status_label(status))}</span>
       </summary>
       <div class="bte-marker-body">
         <div class="bte-marker-evidence">
@@ -548,7 +522,7 @@ def _final_marker_card(test: dict[str, Any]) -> str:
       <div class="bte-ideal-marker-head">
         <div class="bte-ideal-title-line">
           <h3>{escape(marker)}</h3>
-          <span class="bte-ideal-status">{escape(status.title())}</span>
+          <span class="bte-ideal-status">{escape(_display_status_label(status))}</span>
         </div>
         <div class="bte-range-scale" style="--value-position: {range_position}%; --value-position-number: {range_position}">
           <div class="bte-range-value">
@@ -556,7 +530,7 @@ def _final_marker_card(test: dict[str, Any]) -> str:
             <small>{escape(unit)}</small>
           </div>
           <div class="bte-range-track" aria-hidden="true">
-            <span>Bad</span>
+            <span>Low</span>
             <span>Normal</span>
             <span>Good</span>
           </div>
@@ -1145,6 +1119,16 @@ gradio-app,
   background: transparent !important;
 }
 
+.bte-workflow-panel,
+.bte-final-row {
+  position: relative;
+}
+
+.bte-workflow-phase,
+.bte-workflow-phase-marker {
+  display: none !important;
+}
+
 .bte-step-row-block,
 .bte-step-row-block > div {
   width: var(--bte-rail) !important;
@@ -1178,7 +1162,7 @@ gradio-app,
   margin-left: auto !important;
   margin-right: auto !important;
   padding: 0 !important;
-  background: transparent !important;
+  background: var(--bte-page) !important;
   border: 0 !important;
   box-shadow: none !important;
 }
@@ -1244,6 +1228,34 @@ gradio-app,
   background: var(--bte-surface);
   box-shadow: var(--bte-shadow);
   overflow: hidden;
+  opacity: 0.55;
+  filter: saturate(0.6);
+  transition: opacity 220ms ease, filter 220ms ease, box-shadow 220ms ease, transform 220ms ease, border-color 220ms ease, background 220ms ease;
+}
+
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="ready"]) ~ .bte-step-row-block .bte-step-heading--upload,
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="processing"]) ~ .bte-step-row-block .bte-step-heading--analysis,
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="done"]) ~ .bte-step-row-block .bte-step-heading--report {
+  opacity: 1;
+  filter: saturate(1);
+  transform: translateY(-1px);
+  border-color: rgba(37, 99, 235, 0.32);
+  background: linear-gradient(180deg, rgba(37, 99, 235, 0.08), rgba(255, 255, 255, 0.98));
+  box-shadow: 0 16px 34px rgba(37, 99, 235, 0.1);
+}
+
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="ready"]) ~ .bte-step-row-block .bte-step-heading--analysis,
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="ready"]) ~ .bte-step-row-block .bte-step-heading--report,
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="processing"]) ~ .bte-step-row-block .bte-step-heading--upload,
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="processing"]) ~ .bte-step-row-block .bte-step-heading--report,
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="done"]) ~ .bte-step-row-block .bte-step-heading--upload,
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="done"]) ~ .bte-step-row-block .bte-step-heading--analysis {
+  opacity: 0.38;
+  filter: saturate(0.45);
+  transform: none;
+  background: var(--bte-surface);
+  box-shadow: var(--bte-shadow);
+  border-color: rgba(216, 226, 238, 0.92);
 }
 
 .bte-step-heading span {
@@ -1275,10 +1287,17 @@ gradio-app,
   text-align: left !important;
 }
 
+.bte-panel-upload .bte-upload-card,
+.bte-panel-analysis .bte-formation,
+.bte-panel-result .bte-formation,
+.bte-final-row .bte-report {
+  transition: opacity 220ms ease, filter 220ms ease, box-shadow 220ms ease, transform 220ms ease, border-color 220ms ease, background 220ms ease;
+}
+
 .bte-step-heading--report {
-  margin-top: 8px;
-  min-height: auto;
-  padding: 0;
+  margin-top: 0;
+  min-height: 112px;
+  padding: 18px;
 }
 
 .bte-upload-card {
@@ -1287,6 +1306,7 @@ gradio-app,
   flex-direction: column;
   justify-content: space-between;
   min-height: 430px;
+  overflow: visible !important;
 }
 
 .bte-formation {
@@ -1316,6 +1336,75 @@ gradio-app,
 .bte-formation-stage--result .bte-smart-report,
 .bte-formation-stage--result .bte-report-window {
   width: 100%;
+}
+
+.bte-panel-analysis .bte-formation--analysis,
+.bte-panel-result .bte-formation--result {
+  overflow: visible;
+}
+
+.bte-panel-result .bte-smart-report,
+.bte-panel-result .bte-mini-card,
+.bte-panel-result .bte-mini-chart span {
+  animation-play-state: paused !important;
+}
+
+.bte-panel-analysis .bte-source-doc,
+.bte-panel-analysis .bte-scan-band,
+.bte-panel-analysis .bte-flow span,
+.bte-panel-analysis .bte-flow i,
+.bte-panel-analysis .bte-flow b {
+  animation-play-state: paused !important;
+}
+
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="ready"]) ~ .bte-hero-grid .bte-panel-analysis .bte-formation--analysis,
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="ready"]) ~ .bte-hero-grid .bte-panel-result .bte-formation--result,
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="processing"]) ~ .bte-hero-grid .bte-panel-upload .bte-upload-card,
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="processing"]) ~ .bte-hero-grid .bte-panel-result .bte-formation--result,
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="done"]) ~ .bte-hero-grid .bte-panel-upload .bte-upload-card,
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="done"]) ~ .bte-hero-grid .bte-panel-analysis .bte-formation--analysis {
+  opacity: 0.42;
+  filter: saturate(0.5);
+}
+
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="ready"]) ~ .bte-hero-grid .bte-panel-upload .bte-upload-card,
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="processing"]) ~ .bte-hero-grid .bte-panel-analysis .bte-formation--analysis,
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="done"]) ~ .bte-hero-grid .bte-panel-result .bte-formation--result {
+  opacity: 1;
+  filter: saturate(1);
+}
+
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="ready"]) ~ .bte-hero-grid .bte-panel-analysis .bte-formation--analysis,
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="done"]) ~ .bte-hero-grid .bte-panel-upload .bte-upload-card,
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="ready"]) ~ .bte-hero-grid .bte-panel-result .bte-formation--result,
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="processing"]) ~ .bte-hero-grid .bte-panel-upload .bte-upload-card,
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="processing"]) ~ .bte-hero-grid .bte-panel-result .bte-formation--result,
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="done"]) ~ .bte-hero-grid .bte-panel-analysis .bte-formation--analysis {
+  animation-play-state: paused !important;
+}
+
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="processing"]) ~ .bte-hero-grid .bte-panel-analysis .bte-formation--analysis,
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="done"]) ~ .bte-hero-grid .bte-panel-result .bte-formation--result {
+  animation-play-state: running !important;
+}
+
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="done"]) ~ .bte-hero-grid .bte-panel-result .bte-smart-report,
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="done"]) ~ .bte-hero-grid .bte-panel-result .bte-mini-card,
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="done"]) ~ .bte-hero-grid .bte-panel-result .bte-mini-chart span {
+  animation-play-state: running !important;
+}
+
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="processing"]) ~ .bte-hero-grid .bte-panel-analysis .bte-source-doc,
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="processing"]) ~ .bte-hero-grid .bte-panel-analysis .bte-scan-band,
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="processing"]) ~ .bte-hero-grid .bte-panel-analysis .bte-flow span,
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="processing"]) ~ .bte-hero-grid .bte-panel-analysis .bte-flow i,
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="processing"]) ~ .bte-hero-grid .bte-panel-analysis .bte-flow b {
+  animation-play-state: running !important;
+}
+
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="done"]) ~ .bte-hero-grid .bte-panel-result .bte-formation--result .bte-smart-report,
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="ready"]) ~ .bte-hero-grid .bte-panel-upload .bte-upload-card {
+  animation-play-state: paused !important;
 }
 
 .bte-source-doc,
@@ -1475,9 +1564,9 @@ gradio-app,
   background: var(--bte-green-soft);
 }
 
-.bte-mini-card--amber {
-  border-color: rgba(154, 103, 0, 0.2);
-  background: var(--bte-amber-soft);
+.bte-mini-card--red {
+  border-color: rgba(200, 70, 70, 0.2);
+  background: var(--bte-red-soft);
   animation-delay: 0.35s;
 }
 
@@ -1569,27 +1658,6 @@ gradio-app,
 .bte-run-status--loading {
   border-color: rgba(37, 99, 235, 0.22);
   background: var(--bte-blue-soft);
-}
-
-button.primary {
-  background: #111827 !important;
-  border-radius: 14px !important;
-  min-height: 44px !important;
-  border: 0 !important;
-  box-shadow: 0 12px 26px rgba(17, 24, 39, 0.2) !important;
-  font-size: 0 !important;
-}
-
-button.primary::after {
-  content: "Extract test results";
-  color: #ffffff !important;
-  -webkit-text-fill-color: #ffffff !important;
-  font-size: 16px !important;
-  font-weight: 720 !important;
-}
-
-.bte-action {
-  margin-top: 12px !important;
 }
 
 .bte-uploader {
@@ -1761,7 +1829,7 @@ button.bte-action *,
   border: 1px solid var(--bte-line);
   border-radius: var(--bte-radius);
   padding: 22px;
-  background: var(--bte-surface);
+  background: var(--bte-page);
   box-shadow: var(--bte-shadow);
 }
 
@@ -1771,7 +1839,7 @@ button.bte-action *,
   place-items: center;
   text-align: center;
   color: var(--bte-muted);
-  background: var(--bte-surface);
+  background: var(--bte-page);
 }
 
 .bte-report--empty h2 {
@@ -1786,7 +1854,7 @@ button.bte-action *,
   gap: 28px;
   overflow: hidden;
   position: relative;
-  background: var(--bte-surface);
+  background: var(--bte-page);
 }
 
 .bte-loading-report::after {
@@ -2299,13 +2367,23 @@ button.bte-action *,
   margin-top: 34px;
   display: grid;
   gap: 16px;
-  background: transparent;
+  background: var(--bte-page);
 }
 
 .bte-final-report {
   width: var(--bte-rail) !important;
   max-width: var(--bte-rail) !important;
   margin: 0 auto !important;
+  background: rgb(248, 249, 252) !important;
+}
+
+.bte-final-report .bte-ideal-marker {
+  box-shadow: 0 4px 10px rgba(17, 24, 39, 0.035);
+}
+
+.bte-final-report .bte-ideal-marker:hover,
+.bte-final-report .bte-ideal-marker:focus-within {
+  box-shadow: 0 6px 14px rgba(17, 24, 39, 0.05);
 }
 
 .bte-ideal-hero {
@@ -2320,7 +2398,7 @@ button.bte-action *,
   background:
     linear-gradient(120deg, rgba(18, 128, 92, 0.98) 0%, rgba(37, 99, 235, 0.95) 58%, rgba(191, 52, 52, 0.82) 100%),
     #12805c;
-  box-shadow: var(--bte-shadow-strong);
+  box-shadow: 0 6px 16px rgba(17, 24, 39, 0.045);
 }
 
 .bte-ideal-hero .bte-kicker,
@@ -2938,18 +3016,23 @@ with gr.Blocks(title="Blood Test Explainer") as demo:
                 """
             )
 
+    workflow_phase = gr.HTML(
+        workflow_phase_html("ready"),
+        elem_classes=["bte-workflow-phase"],
+    )
+
     gr.HTML(
         """
         <div class="bte-step-row">
-          <div class="bte-step-heading">
+          <div class="bte-step-heading bte-step-heading--upload">
             <span>1</span>
             <h2>Upload your blood tests in any suitable format</h2>
           </div>
-          <div class="bte-step-heading">
+          <div class="bte-step-heading bte-step-heading--analysis">
             <span>2</span>
             <h2>Wait until it's analysed by our AI Agents</h2>
           </div>
-          <div class="bte-step-heading">
+          <div class="bte-step-heading bte-step-heading--report">
             <span>3</span>
             <h2>Get your blood test results in the clearest possible format</h2>
           </div>
@@ -2959,7 +3042,7 @@ with gr.Blocks(title="Blood Test Explainer") as demo:
     )
 
     with gr.Row(equal_height=False, elem_classes=["bte-hero-grid"]):
-        with gr.Column(scale=4, min_width=320):
+        with gr.Column(scale=4, min_width=320, elem_classes=["bte-workflow-panel", "bte-panel-upload"]):
             with gr.Group(elem_classes=["bte-shell", "bte-upload-card"]):
                 gr.HTML(
                     '<p class="bte-upload-hint">Supported formats: PDF, PNG, JPEG</p>',
@@ -2974,12 +3057,11 @@ with gr.Blocks(title="Blood Test Explainer") as demo:
                         elem_classes=["bte-uploader"],
                     )
                 selected_document = gr.HTML(selected_document_html(), visible=False)
-                run_button = gr.Button("Extract test results", variant="primary", elem_classes=["bte-action"])
 
-        with gr.Column(scale=4, min_width=300):
+        with gr.Column(scale=4, min_width=300, elem_classes=["bte-workflow-panel", "bte-panel-analysis"]):
             gr.HTML(analysis_animation_html())
 
-        with gr.Column(scale=4, min_width=300):
+        with gr.Column(scale=4, min_width=300, elem_classes=["bte-workflow-panel", "bte-panel-result"]):
             gr.HTML(result_preview_html())
 
     status = gr.HTML(
@@ -2988,30 +3070,27 @@ with gr.Blocks(title="Blood Test Explainer") as demo:
         visible=False,
     )
 
+    report_panel = gr.Group(visible=False, elem_classes=["bte-report-panel", "bte-final-row"])
+    with report_panel:
+        report = gr.HTML(empty_report_html())
+
     uploaded.change(
         upload_state,
         inputs=[uploaded],
-        outputs=[upload_dropzone, selected_document],
+        outputs=[upload_dropzone, selected_document, workflow_phase],
         show_progress="hidden",
-    )
-
-    with gr.Group(visible=False, elem_classes=["bte-report-panel", "bte-final-row"]) as report_panel:
-        report = gr.HTML(empty_report_html())
-
-    run_button.click(
+    ).then(
         show_processing,
-        outputs=[status, report_panel, report],
+        outputs=[status, report_panel, report, workflow_phase],
         scroll_to_output=True,
         show_progress="hidden",
     ).then(
         extract_lab_values,
         inputs=[uploaded],
-        outputs=[status, report, report_panel],
+        outputs=[status, report, report_panel, workflow_phase],
         scroll_to_output=True,
         show_progress="hidden",
     )
-
-    gr.HTML(ideal_document_example_html(), elem_classes=["bte-ideal-row"])
 
 
 if __name__ == "__main__":

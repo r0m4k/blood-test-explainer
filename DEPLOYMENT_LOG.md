@@ -66,3 +66,10 @@ ZEROGPU_MODEL_ID=openbmb/MiniCPM-V-4.6
 Future fine-tuned model:
 
 Only change the `LLAMACPP_*` variables to point at the fine-tuned GGUF repo/files.
+
+The app now also surfaces backend load errors directly in the UI and falls back to the
+Transformers ZeroGPU backend when the llama.cpp GGUF load path fails, so a runtime mismatch does
+not collapse the whole extraction flow.
+
+We also upgraded the llama-cpp-python binding to a MiniCPM-V 4.6-capable build, which is the
+actual fix for the earlier `Failed to load model from file` failure.
