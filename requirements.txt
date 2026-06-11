@@ -4,13 +4,8 @@ requests==2.32.5
 pillow==12.0.0
 pymupdf==1.26.6
 json-repair==0.60.1
-accelerate
-bitsandbytes
-torch
-torchvision
-av
-transformers[torch]>=5.7.0
+huggingface_hub==1.19.0
 
-# Llama Champion path: run the official OpenBMB GGUF through llama.cpp on ZeroGPU.
-# Use a build that includes MiniCPM-V 4.6 mtmd support.
-llama-cpp-python @ git+https://github.com/JamePeng/llama-cpp-python.git
+# Active HF Space path: run the official OpenBMB GGUF through llama.cpp on ZeroGPU.
+# Keep this pinned to a wheel release so the Space build avoids Git-based source resolution.
+llama-cpp-python==0.3.28

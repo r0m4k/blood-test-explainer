@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+import time
 import traceback
 from html import escape
 from typing import Any
@@ -14,10 +15,17 @@ from src.report_pipeline import build_health_report
 
 
 load_local_env()
+_BOOT_T0 = time.perf_counter()
+
+
+def _boot_log(message: str) -> None:
+    elapsed = time.perf_counter() - _BOOT_T0
+    print(f"[Blood Test Explainer][{elapsed:0.2f}s] {message}", flush=True)
 
 # The hosted API key field is only relevant when the API backend is active. The current Space
 # path is ZeroGPU, so users should not see model/API configuration controls.
 _API_MODE = os.getenv("EXTRACTOR_BACKEND", "auto").strip().lower() == "api"
+_boot_log("environment loaded")
 
 
 def extract_lab_values(
@@ -3094,4 +3102,5 @@ with gr.Blocks(title="Blood Test Explainer") as demo:
 
 
 if __name__ == "__main__":
+    _boot_log("launching Gradio demo")
     demo.launch(css=CUSTOM_CSS)
