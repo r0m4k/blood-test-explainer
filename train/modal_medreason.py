@@ -110,9 +110,11 @@ def train_medreason(n: int = 4000, epochs: int = 1, lr: float = 1e-4, n_eval: in
 
 @app.local_entrypoint()
 def main(n: int = 4000, epochs: int = 1, lr: float = 1e-4) -> None:
-    path = train_medreason.remote(n=n, epochs=epochs, lr=lr)
-    print(f"\nMedical-reasoning LoRA saved to volume 'blood-test-adapters' at {path}")
-    print("Next:")
+    # spawn() runs the job in the background on Modal and returns immediately, so it survives the
+    # local client disconnecting (.remote() + --detach can still be canceled on a dropped connection).
+    call = train_medreason.spawn(n=n, epochs=epochs, lr=lr)
+    print(f"\nLaunched medical-reasoning LoRA on Modal (call {call.object_id}) — runs in the background.")
+    print("Watch it in the Modal dashboard; it saves to the 'blood-test-adapters' volume. When done:")
     print("  modal run train/modal_finetune.py::merge --adapter-dir /adapters/medreason-lora \\")
     print("      --repo-id dimitriskl/blood-test-minicpmv-4_6-medreason")
     print("  modal run train/modal_eval.py::compare --finetuned-id dimitriskl/blood-test-minicpmv-4_6-medreason")
