@@ -10,10 +10,11 @@ This replaced the Docker + `llama-server` path because ZeroGPU is only available
 |---|---|
 | Space SDK | `gradio` |
 | Hardware | ZeroGPU |
-| Model runtime | Official OpenBMB Transformers path |
-| Default backend | `EXTRACTOR_BACKEND=auto`, resolving to `zerogpu` |
-| Model variable | `ZEROGPU_MODEL_ID` |
-| Extraction backend | `src/extraction/zerogpu_transformers.py` |
+| Badge-target runtime | `llama.cpp` through `llama-cpp-python` |
+| Badge-target backend | `EXTRACTOR_BACKEND=llamacpp-gpu` |
+| Fallback backend | `EXTRACTOR_BACKEND=zerogpu` with Transformers |
+| Model variables | `LLAMACPP_GGUF_REPO`, `LLAMACPP_MODEL_FILE`, `LLAMACPP_MMPROJ_FILE` |
+| Extraction backends | `src/extraction/llamacpp_gpu.py`, `src/extraction/zerogpu_transformers.py` |
 | Report enrichment | `src/report_pipeline.py` + `kb/cbc_knowledge_graph.json` |
 
 Do not switch the Space back to Docker unless the project intentionally gives up ZeroGPU.
@@ -22,8 +23,9 @@ Do not switch the Space back to Docker unless the project intentionally gives up
 
 `EXTRACTOR_BACKEND`:
 
-- `auto`: default, uses ZeroGPU Transformers.
-- `zerogpu`: force the ZeroGPU Transformers backend.
+- `auto`: default, uses ZeroGPU Transformers as the safest startup path.
+- `llamacpp-gpu`: badge-target path, runs GGUF through `llama.cpp` inside `@spaces.GPU`.
+- `zerogpu`: force the ZeroGPU Transformers fallback backend.
 - `api`: hosted OpenBMB endpoint for development fallback only.
 - `local` / `server` / `llamacpp`: local experimental backends, not the active HF Space path.
 
@@ -49,6 +51,7 @@ Install dependencies from `requirements.txt`, including:
 
 ```text
 spaces
+llama-cpp-python
 transformers[torch]>=5.7.0
 torch
 torchvision
@@ -56,28 +59,41 @@ av
 accelerate
 ```
 
-The backend uses `@spaces.GPU(duration=120)` for the model generation call.
+Both ZeroGPU backends use `@spaces.GPU(duration=120)` for the model generation call.
 
 ## Current Model
 
-Current default:
+Badge-target Space variables:
 
 ```bash
-ZEROGPU_MODEL_ID=openbmb/MiniCPM-V-4.6
+EXTRACTOR_BACKEND=llamacpp-gpu
+LLAMACPP_GGUF_REPO=openbmb/MiniCPM-V-4.6-gguf
+LLAMACPP_MODEL_FILE=MiniCPM-V-4_6-Q4_K_M.gguf
+LLAMACPP_MMPROJ_FILE=mmproj-model-f16.gguf
 ```
 
-This is the official OpenBMB model. No model files are committed to the Space repo.
+This is the official OpenBMB GGUF model path. No model files are committed to the Space repo.
+
+Fallback variables if llama.cpp is incompatible on ZeroGPU:
+
+```bash
+EXTRACTOR_BACKEND=zerogpu
+ZEROGPU_MODEL_ID=openbmb/MiniCPM-V-4.6
+```
 
 ## Fine-Tuned Model Swap
 
 When the fine-tuned model is ready:
 
-1. Upload it to a Hugging Face model repo.
-2. Keep the same Gradio + ZeroGPU + Transformers architecture.
-3. Change only:
+1. Convert/quantize it to GGUF.
+2. Upload it and the compatible mmproj to a Hugging Face model repo.
+3. Keep the same Gradio + ZeroGPU + llama.cpp architecture.
+4. Change only:
 
 ```bash
-ZEROGPU_MODEL_ID=<owner>/<fine-tuned-minicpm-v-model>
+LLAMACPP_GGUF_REPO=<owner>/<fine-tuned-minicpm-v-gguf-repo>
+LLAMACPP_MODEL_FILE=<fine-tuned-model>.gguf
+LLAMACPP_MMPROJ_FILE=<compatible-mmproj>.gguf
 ```
 
 Do not add model files to the Space git repo. Do not reintroduce Docker or `llama-server` for the ZeroGPU deployment.

@@ -7,7 +7,7 @@ the model + vision projector are downloaded from the Hub, all layers are offload
   - 🔌 Off the Grid    (model in the Space, no external inference API)
   - quantized GGUF on GPU (fast, low VRAM)
 
-Requires a llama-cpp-python build with MiniCPM-V 4.6 support (>= 0.3.39) and a CUDA wheel.
+Requires a llama-cpp-python CUDA wheel with the MiniCPM-V chat handler available.
 
 Config (env):
   LLAMACPP_GGUF_REPO    HF repo with the GGUF + mmproj   (default: openbmb/MiniCPM-V-4.6-gguf;
@@ -30,6 +30,7 @@ from src.openbmb_client import (
     EXTRACTION_PROMPT,
     ExtractionResult,
     _normalize_notes,
+    _normalize_patient,
     _normalize_tests,
     _parse_json_response,
 )
@@ -74,6 +75,7 @@ class LlamaCppGPUExtractor:
         )
         parsed = _parse_json_response(raw)
         return ExtractionResult(
+            patient=_normalize_patient(parsed.get("patient", {})),
             tests=_normalize_tests(parsed.get("tests", [])),
             notes=_normalize_notes(parsed.get("notes", [])),
             raw_response=raw,

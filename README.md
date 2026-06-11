@@ -48,23 +48,28 @@ The knowledge graph is educational context, not diagnosis. The lab-provided refe
 The Hugging Face Space is intentionally deployed as a **Gradio ZeroGPU Space**. This is the active
 deployment path.
 
-The app uses the official OpenBMB Transformers model path for MiniCPM-V 4.6 and allocates a ZeroGPU
-worker only for the extraction call through `@spaces.GPU`. The deterministic knowledge-graph
+The badge-target backend runs the official OpenBMB MiniCPM-V 4.6 GGUF through `llama.cpp`
+(`llama-cpp-python`) inside a ZeroGPU-managed function. The deterministic knowledge-graph
 enrichment and UI rendering stay in normal Gradio/Python code.
 
 This workflow should not be further changed back to Docker unless the project intentionally gives up
-ZeroGPU. When the fine-tuned model is ready, only replace the model variable:
+ZeroGPU. When the fine-tuned GGUF model is ready, only replace the model variables:
 
 ```bash
-ZEROGPU_MODEL_ID=openbmb/MiniCPM-V-4.6
+EXTRACTOR_BACKEND=llamacpp-gpu
+LLAMACPP_GGUF_REPO=openbmb/MiniCPM-V-4.6-gguf
+LLAMACPP_MODEL_FILE=MiniCPM-V-4_6-Q4_K_M.gguf
+LLAMACPP_MMPROJ_FILE=mmproj-model-f16.gguf
 ```
 
-The future fine-tuned deployment should keep the same Gradio + ZeroGPU + Transformers architecture
-and only insert the fine-tuned model repository path into `ZEROGPU_MODEL_ID`.
+The future fine-tuned deployment should keep the same Gradio + ZeroGPU + `llama.cpp` architecture
+and only insert the fine-tuned GGUF repository/path into the `LLAMACPP_*` variables. If
+`llama-cpp-python` proves incompatible with MiniCPM-V 4.6 on ZeroGPU, the fallback backend is
+`EXTRACTOR_BACKEND=zerogpu` with `ZEROGPU_MODEL_ID=openbmb/MiniCPM-V-4.6`.
 
 ## Local Setup
 
 ```bash
 pip install -r requirements.txt
-EXTRACTOR_BACKEND=zerogpu python app.py
+EXTRACTOR_BACKEND=llamacpp-gpu python app.py
 ```
