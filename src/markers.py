@@ -51,12 +51,12 @@ MARKERS: tuple[Marker, ...] = (
     # --- Complete blood count ---
     Marker("Hemoglobin", "g/dL", 13.5, 17.5, "CBC", "oxygen-carrying protein in red blood cells", ("Hgb", "HGB", "Hb")),
     Marker("Hematocrit", "%", 38.8, 50.0, "CBC", "fraction of blood made up of red cells", ("Hct", "HCT", "PCV")),
-    Marker("White Blood Cell Count", "10^3/uL", 4.5, 11.0, "CBC", "immune cells that fight infection", ("WBC", "Leukocytes", "WBC Count")),
+    Marker("White Blood Cell Count", "10^3/uL", 4.5, 11.0, "CBC", "immune cells that fight infection", ("WBC", "Leukocytes", "WBC Count", "TLC", "Total Leucocyte Count")),
     Marker("Platelet Count", "10^3/uL", 150, 400, "CBC", "cell fragments that help blood clot", ("Platelets", "PLT")),
     Marker("Red Blood Cell Count", "10^6/uL", 4.5, 5.9, "CBC", "number of oxygen-carrying red cells", ("RBC", "Erythrocytes")),
     Marker("MCV", "fL", 80, 100, "CBC", "average size of red blood cells", ("Mean Corpuscular Volume",)),
     # --- Metabolic panel ---
-    Marker("Glucose", "mg/dL", 70, 99, "Metabolic", "blood sugar level", ("Fasting Glucose", "GLU", "Blood Sugar")),
+    Marker("Glucose", "mg/dL", 70, 99, "Metabolic", "blood sugar level", ("Fasting Glucose", "GLU", "Blood Sugar", "FBS", "RBS", "Fasting Blood Sugar")),
     Marker("Creatinine", "mg/dL", 0.7, 1.3, "Metabolic", "kidney-function waste product", ("Cr", "Serum Creatinine")),
     Marker("eGFR", "mL/min/1.73m2", 90, None, "Metabolic", "estimated kidney filtration rate", ("GFR", "Estimated GFR")),
     Marker("Blood Urea Nitrogen", "mg/dL", 7, 20, "Metabolic", "kidney-function waste product", ("BUN", "Urea Nitrogen")),
@@ -88,24 +88,40 @@ MARKERS: tuple[Marker, ...] = (
 )
 
 
-# Fast lookup: any alias or canonical name (casefolded) -> Marker.
+# Lab qualifiers we strip when matching ("Serum Sodium" == "Sodium", "Total WBC Count" == "WBC").
+_QUALIFIERS = frozenset((
+    "serum", "plasma", "blood", "total", "count", "counts", "level", "levels",
+    "estimation", "absolute", "fasting", "random", "s", "p", "the",
+))
+
+
+def _normalize(name: str) -> str:
+    """Collapse a printed marker name to a comparable core: drop parentheticals + punctuation,
+    normalise British spelling, remove lab qualifiers, and sort tokens (word order varies)."""
+    s = name.casefold().strip()
+    s = re.sub(r"\([^)]*\)", " ", s)                         # drop parentheticals
+    s = s.replace("haemo", "hemo").replace("haema", "hema")  # British -> US
+    s = s.replace("leuco", "leuko").replace("oe", "e")
+    s = re.sub(r"[^a-z0-9 ]", " ", s)                        # punctuation -> space
+    tokens = sorted(t for t in s.split() if t and t not in _QUALIFIERS)
+    return " ".join(tokens)
+
+
+# Fast lookups: exact (casefolded) and normalized.
 _LOOKUP: dict[str, Marker] = {}
+_NORM_LOOKUP: dict[str, Marker] = {}
 for _m in MARKERS:
     _LOOKUP[_m.name.casefold()] = _m
+    _NORM_LOOKUP.setdefault(_normalize(_m.name), _m)
     for _a in _m.aliases:
         _LOOKUP.setdefault(_a.casefold(), _m)
+        _NORM_LOOKUP.setdefault(_normalize(_a), _m)
 
 
-def resolve(name: str) -> Marker | None:
-    """Match an extracted marker name (canonical or alias) to a known Marker.
-
-    Real reports print verbose names like "Packed Cell Volume (PCV)" or "Hemoglobin (HB/Hgb)".
-    We try the exact name, then the text outside the parentheses, then the abbreviation inside,
-    so both the canonical form and the lab's variant resolve to the same marker.
-    """
-    if not name:
-        return None
+def _resolve_one(name: str) -> Marker | None:
     key = name.strip().casefold()
+    if not key:
+        return None
     if key in _LOOKUP:
         return _LOOKUP[key]
     m = re.search(r"\(([^)]*)\)", key)
@@ -115,4 +131,23 @@ def resolve(name: str) -> Marker | None:
         for cand in (outer, inner):
             if cand in _LOOKUP:
                 return _LOOKUP[cand]
+    norm = _normalize(name)
+    if norm and norm in _NORM_LOOKUP:
+        return _NORM_LOOKUP[norm]
+    return None
+
+
+def resolve(name: str) -> Marker | None:
+    """Match an extracted marker name (canonical/alias/variant) to a known Marker.
+
+    Handles real-report variety: exact name, the text inside/outside parentheses, a normalized
+    form that ignores lab qualifiers (Serum/Total/Count/…), punctuation, word order, and British
+    spelling, and slash/comma-joined names like "PCV / Hematocrit" or "Total WBC Count / TLC".
+    """
+    if not name:
+        return None
+    for cand in [name, *re.split(r"[/,;|]", name)]:
+        marker = _resolve_one(cand)
+        if marker is not None:
+            return marker
     return None
