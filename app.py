@@ -2535,7 +2535,7 @@ button.bte-action *,
   max-width: var(--bte-rail) !important;
   margin: 0 auto !important;
   background: rgb(248, 249, 252) !important;
-  gap: 0;
+  gap: 10px;
 }
 
 .bte-final-report .bte-ideal-marker {
@@ -2584,7 +2584,7 @@ button.bte-action *,
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
-  margin: -10px 0 0;
+  margin: -8px 0 0;
 }
 
 .bte-ideal-filter {
@@ -2675,7 +2675,7 @@ button.bte-action *,
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: start;
   gap: 12px;
-  margin-top: -2px;
+  margin-top: 14px;
 }
 
 .bte-ideal-column {
