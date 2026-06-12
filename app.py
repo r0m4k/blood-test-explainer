@@ -3205,7 +3205,7 @@ with gr.Blocks(title="Blood Test Explainer") as demo:
     with gr.Row(equal_height=False, elem_classes=["bte-hero-grid"]):
         with gr.Column(scale=4, min_width=320, elem_classes=["bte-workflow-panel", "bte-panel-upload"]):
             with gr.Group(elem_classes=["bte-shell", "bte-upload-card"]):
-                gr.HTML(
+                upload_hint = gr.HTML(
                     '<p class="bte-upload-hint">Supported formats: PDF</p>',
                     elem_classes=["bte-upload-hint-wrap"],
                 )
@@ -3238,7 +3238,7 @@ with gr.Blocks(title="Blood Test Explainer") as demo:
     uploaded.change(
         upload_state,
         inputs=[uploaded],
-        outputs=[upload_dropzone, selected_document, workflow_phase],
+        outputs=[upload_dropzone, upload_hint, selected_document, workflow_phase],
         show_progress="hidden",
     ).then(
         show_processing,
