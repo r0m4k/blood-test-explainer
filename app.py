@@ -10,6 +10,7 @@ from typing import Any
 import gradio as gr
 
 from src.extraction import build_extractor
+from src.interpretation_render import patterns_html
 from src.local_env import load_local_env
 from src.report_pipeline import build_health_report
 
@@ -72,7 +73,9 @@ def extract_lab_values(
 
     return (
         _status_html("Extraction complete", status_text),
-        report_html(health_report),
+        # Per-marker insight comes from the knowledge-graph report; append the cross-marker
+        # patterns (anemia picture, liver cluster, lipid risk) which the per-marker report omits.
+        report_html(health_report) + patterns_html(result.tests),
         gr.update(visible=True),
         workflow_phase_html("done"),
     )
