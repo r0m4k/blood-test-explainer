@@ -1,5 +1,31 @@
 # Deployment Log
 
+## 2026-06-13 — Route ZeroGPU to Transformers, CPU to llama.cpp
+
+Decision: keep `EXTRACTOR_BACKEND=auto`, but make ZeroGPU select the official OpenBMB
+Transformers backend instead of relying on app-level CUDA visibility.
+
+Why:
+- On ZeroGPU, CUDA is allocated only inside a `@spaces.GPU` worker, so
+  `torch.cuda.is_available()` can be false in normal Gradio app code.
+- The app was therefore selecting the CPU llama.cpp fallback even while the Space hardware was
+  configured as ZeroGPU.
+- The intended runtime behavior is now explicit: `ACCELERATOR=zero-a10g`, `ZERO_GPU=TRUE`, or
+  visible CUDA selects Transformers; CPU-only runtime selects llama.cpp.
+
+Space variables:
+
+```bash
+EXTRACTOR_BACKEND=auto
+ZEROGPU_MODEL_ID=openbmb/MiniCPM-V-4.6
+```
+
+CPU fallback after a Transformers failure is now opt-in with:
+
+```bash
+AUTO_FALLBACK_TO_LLAMACPP=1
+```
+
 ## 2026-06-10 — Switch from Docker Space to Gradio ZeroGPU
 
 Decision: use **Gradio ZeroGPU** as the active Hugging Face Space architecture.

@@ -1,7 +1,7 @@
 """Backend selection.
 
 `EXTRACTOR_BACKEND` env:
-  - `auto`: Transformers when CUDA is visible, CPU llama.cpp otherwise.
+  - `auto`: Transformers on ZeroGPU/CUDA, CPU llama.cpp otherwise.
   - `llamacpp-gpu` / `llama-champion`: llama.cpp GGUF badge path.
   - `zerogpu` / `transformers`: official OpenBMB Transformers backend.
   - `api`: hosted OpenBMB endpoint (dev fallback only).

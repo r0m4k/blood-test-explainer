@@ -49,10 +49,11 @@ The knowledge graph is educational context, not diagnosis. The lab-provided refe
 The Hugging Face Space is intentionally deployed as a **Gradio Space** with adaptive extraction.
 This is the active deployment path.
 
-With `EXTRACTOR_BACKEND=auto`, the app checks CUDA availability at runtime. If CUDA is visible, it
-uses the official OpenBMB MiniCPM-V 4.6 Transformers path. If CUDA is not visible, it falls back to
-the CPU `llama.cpp` GGUF path. If the CUDA worker fails, `auto` retries with CPU llama.cpp unless
-`AUTO_FALLBACK_TO_LLAMACPP=0`. The deterministic knowledge-graph enrichment and UI rendering stay
+With `EXTRACTOR_BACKEND=auto`, the app uses the official OpenBMB MiniCPM-V 4.6 Transformers path
+when the runtime is ZeroGPU or CUDA. On CPU-only hardware, it uses the CPU `llama.cpp` GGUF path.
+ZeroGPU is detected from Hugging Face's `ACCELERATOR` runtime variable, for example
+`ACCELERATOR=zero-a10g`, or from explicit runtime flags such as `ZERO_GPU=TRUE`. This matters
+because CUDA is only visible inside the `@spaces.GPU` worker. The deterministic knowledge-graph enrichment and UI rendering stay
 in normal Gradio/Python code.
 
 This workflow should not be further changed back to Docker unless the project intentionally gives up

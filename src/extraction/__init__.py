@@ -1,7 +1,7 @@
 """Extraction backends behind one interface.
 
 `build_extractor()` returns the right backend for the environment:
-  - **auto**: Transformers when CUDA is visible; CPU llama.cpp otherwise.
+  - **auto**: Transformers on ZeroGPU/CUDA; CPU llama.cpp otherwise.
   - **zerogpu** / **transformers**: force official OpenBMB MiniCPM-V through Transformers.
   - **llamacpp-gpu** / **llama-champion**: force GGUF through llama.cpp.
   - **local**: local llama-server / llama.cpp backends for local experimentation.

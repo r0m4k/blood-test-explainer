@@ -10,7 +10,7 @@ This replaced the Docker + `llama-server` path because ZeroGPU is only available
 |---|---|
 | Space SDK | `gradio` |
 | Hardware | Adaptive: CUDA when available, CPU otherwise |
-| Auto backend | Transformers on CUDA, llama.cpp on CPU |
+| Auto backend | Transformers on ZeroGPU/CUDA, llama.cpp on CPU |
 | Force llama.cpp | `EXTRACTOR_BACKEND=llamacpp-gpu` |
 | Force Transformers | `EXTRACTOR_BACKEND=zerogpu` or `EXTRACTOR_BACKEND=transformers` |
 | llama.cpp variables | `LLAMACPP_GGUF_REPO`, `LLAMACPP_MODEL_FILE` |
@@ -24,7 +24,7 @@ Do not switch the Space back to Docker unless the project intentionally gives up
 
 `EXTRACTOR_BACKEND`:
 
-- `auto`: uses the Transformers backend when `torch.cuda.is_available()` is true; otherwise uses the CPU llama.cpp backend. If the Transformers worker fails, it retries with CPU llama.cpp unless `AUTO_FALLBACK_TO_LLAMACPP=0`.
+- `auto`: uses the Transformers backend when Hugging Face reports a ZeroGPU accelerator such as `ACCELERATOR=zero-a10g`, when `ZERO_GPU=TRUE` is set, or when CUDA is visible; otherwise uses the CPU llama.cpp backend. This runtime signal matters because CUDA is only visible inside a `@spaces.GPU` worker. CPU fallback after a Transformers failure is opt-in with `AUTO_FALLBACK_TO_LLAMACPP=1`.
 - `llamacpp-gpu`: force the GGUF llama.cpp backend.
 - `zerogpu` / `transformers`: force the OpenBMB Transformers backend.
 - `api`: hosted OpenBMB endpoint for development fallback only.
@@ -57,8 +57,8 @@ transformers
 llama-cpp-python
 ```
 
-The Space installs both runtime lanes so `EXTRACTOR_BACKEND=auto` can choose at runtime. CUDA
-hardware uses the official OpenBMB Transformers path. CPU hardware uses the prebuilt
+The Space installs both runtime lanes so `EXTRACTOR_BACKEND=auto` can choose at runtime. ZeroGPU or
+CUDA hardware uses the official OpenBMB Transformers path. CPU hardware uses the prebuilt
 `llama-cpp-python` wheel and avoids a source build.
 
 The active llama.cpp path now uses the official prebuilt CPU manylinux wheel for `llama-cpp-python`:
@@ -131,4 +131,4 @@ python3 -m py_compile app.py src/*.py src/extraction/*.py
 .venv/bin/python -m pytest tests/test_report_pipeline.py
 ```
 
-Then verify the Space build uses Gradio, not Docker, and that CUDA hardware selects Transformers while CPU hardware selects llama.cpp.
+Then verify the Space build uses Gradio, not Docker, and that ZeroGPU/CUDA hardware selects Transformers while CPU hardware selects llama.cpp.
