@@ -61,7 +61,7 @@ you are explicitly working on that backend locally.
 The active llama.cpp path pulls `llama-cpp-python` from the official prebuilt CUDA wheel index:
 
 ```text
-https://abetlen.github.io/llama-cpp-python/whl/cu132
+https://abetlen.github.io/llama-cpp-python/whl/cu125
 ```
 
 This avoids the source-build path that was causing the Space build to stall on wheel
