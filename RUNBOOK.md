@@ -53,7 +53,7 @@ Install dependencies from `requirements.txt`, including:
 ```text
 spaces
 torch
-transformers
+transformers[torch]==5.7.0
 llama-cpp-python
 ```
 

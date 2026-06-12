@@ -135,6 +135,29 @@ def _display_status_label(status: str) -> str:
     return normalized.title() if normalized else "Unknown"
 
 
+def hero_attribution_html() -> str:
+    items = [
+        ("Codex", "Build with Codex", "CDX", "aria-label=\"Codex logo\""),
+        ("OpenBMB", "Enabled with OpenBMB", "OB", "aria-label=\"OpenBMB logo\""),
+        ("Modal", "Finetuned with Modal", "M", "aria-label=\"Modal logo\""),
+        ("ACG", "Created by researchers at ACG", "ACG", "aria-label=\"ACG logo\""),
+    ]
+    badges = "\n".join(
+        f"""
+        <li class=\"bte-hero-badge bte-hero-badge--{escape(slug.lower())}\">
+          <span class=\"bte-hero-badge-mark\" {attrs}>{escape(mark)}</span>
+          <span class=\"bte-hero-badge-text\">{escape(label)}</span>
+        </li>
+        """
+        for slug, label, mark, attrs in items
+    )
+    return f"""
+    <ul class=\"bte-hero-attribution\" aria-label=\"Project attributions\">
+      {badges}
+    </ul>
+    """
+
+
 def workflow_arrow_html(kind: str) -> str:
     kind = kind if kind in {"upload", "report"} else "upload"
     if kind == "upload":
@@ -190,19 +213,16 @@ def upload_state(uploaded_file: str | None) -> tuple[Any, Any]:
             workflow_phase_html("ready"),
         )
 
-    filename = os.path.basename(uploaded_file)
     preview_data_url = _uploaded_file_preview_data_url(uploaded_file)
     return (
         gr.update(visible=False),
         gr.update(value="", visible=False),
-        gr.update(visible=True, value=selected_document_html(filename, preview_data_url)),
+        gr.update(visible=True, value=selected_document_html(preview_data_url=preview_data_url)),
         workflow_phase_html("processing"),
     )
 
 
-def selected_document_html(filename: str | None = None, preview_data_url: str | None = None) -> str:
-    if not filename:
-        filename = "Document ready"
+def selected_document_html(preview_data_url: str | None = None) -> str:
     preview_markup = (
         f'<img class="bte-upload-preview-image" src="{escape(preview_data_url)}" alt="Uploaded document preview">'
         if preview_data_url
@@ -219,7 +239,6 @@ def selected_document_html(filename: str | None = None, preview_data_url: str | 
       <div class="bte-selected-preview" aria-hidden="true">
         {preview_markup}
         <div class="bte-selected-preview-overlay"></div>
-        <div class="bte-preview-watermark">{escape(filename)}</div>
       </div>
     </section>
     """
@@ -1021,7 +1040,7 @@ gradio-app,
   margin: 0 auto 18px !important;
   padding: 30px 28px 28px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(360px, 0.46fr);
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
   gap: 32px;
   align-items: center;
   border: 1px solid rgba(255, 255, 255, 0.42);
@@ -1051,6 +1070,69 @@ gradio-app,
 
 .bte-title-copy {
   min-width: 0;
+}
+
+.bte-title-attribution-wrap {
+  min-width: 0;
+  justify-self: end;
+}
+
+.bte-hero-attribution {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+
+.bte-hero-badge {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  backdrop-filter: blur(6px);
+}
+
+.bte-hero-badge-mark {
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.08));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+}
+
+.bte-hero-badge-text {
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  font-size: 13px;
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.bte-hero-badge--codex .bte-hero-badge-mark {
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.95), rgba(18, 128, 92, 0.92));
+}
+
+.bte-hero-badge--openbmb .bte-hero-badge-mark {
+  background: linear-gradient(135deg, rgba(18, 128, 92, 0.95), rgba(37, 99, 235, 0.92));
+}
+
+.bte-hero-badge--modal .bte-hero-badge-mark {
+  background: linear-gradient(135deg, rgba(191, 52, 52, 0.95), rgba(37, 99, 235, 0.9));
+}
+
+.bte-hero-badge--acg .bte-hero-badge-mark {
+  background: linear-gradient(135deg, rgba(90, 99, 214, 0.95), rgba(18, 128, 92, 0.9));
 }
 
 .bte-title .bte-kicker,
@@ -1125,7 +1207,7 @@ gradio-app,
   border: 1px solid var(--bte-line) !important;
   border-radius: var(--bte-radius) !important;
   padding: 18px !important;
-  background: var(--bte-card) !important;
+  background: var(--bte-page) !important;
   box-shadow: var(--bte-shadow) !important;
   overflow: hidden !important;
 }
@@ -1137,7 +1219,7 @@ gradio-app,
   border: 1px solid var(--bte-line) !important;
   border-radius: var(--bte-radius) !important;
   padding: 18px !important;
-  background: var(--bte-card) !important;
+  background: var(--bte-page) !important;
   box-shadow: var(--bte-shadow) !important;
   overflow: hidden !important;
 }
@@ -1769,7 +1851,7 @@ gradio-app,
   border: 1px solid #d8e2ee;
   border-radius: 18px;
   padding: 22px;
-  background: var(--bte-surface);
+  background: var(--bte-page);
 }
 
 .bte-selected-preview {
@@ -1777,7 +1859,7 @@ gradio-app,
   min-height: 260px;
   border-radius: 22px;
   border: 1px solid rgba(216, 226, 238, 0.9);
-  background: linear-gradient(180deg, rgba(248, 249, 252, 0.95), rgba(255, 255, 255, 0.98));
+  background: var(--bte-page);
   overflow: hidden;
 }
 
@@ -1861,20 +1943,6 @@ gradio-app,
   border-radius: 10px;
   background: rgba(36, 105, 235, 0.12);
   filter: blur(1.2px);
-}
-
-.bte-preview-watermark {
-  position: absolute;
-  left: 34px;
-  right: 34px;
-  bottom: 28px;
-  color: rgba(17, 24, 39, 0.2);
-  font-size: 18px;
-  font-weight: 700;
-  letter-spacing: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 .bte-selected-preview-overlay {
@@ -2968,6 +3036,15 @@ button.bte-action *,
     gap: 18px;
   }
 
+  .bte-title-attribution-wrap {
+    justify-self: start;
+    width: 100%;
+  }
+
+  .bte-hero-attribution {
+    grid-template-columns: 1fr;
+  }
+
   .bte-title h1,
   .bte-report h2 {
     font-size: 32px !important;
@@ -3177,6 +3254,8 @@ with gr.Blocks(title="Blood Test Explainer") as demo:
                 </div>
                 """
             )
+        with gr.Column(scale=0, min_width=300, elem_classes=["bte-title-attribution-wrap"]):
+            gr.HTML(hero_attribution_html())
 
     workflow_phase = gr.HTML(
         workflow_phase_html("ready"),

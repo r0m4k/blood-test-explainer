@@ -26,6 +26,20 @@ CPU fallback after a Transformers failure is now opt-in with:
 AUTO_FALLBACK_TO_LLAMACPP=1
 ```
 
+Follow-up fix: MiniCPM-V 4.6 declares `model_type: minicpmv4_6` and its official model card
+requires `transformers[torch]>=5.7.0`. The Space was still pinned to `transformers==4.57.3`, which
+caused the ZeroGPU worker to fail with:
+
+```text
+Transformers does not recognize this architecture
+```
+
+The runtime now pins:
+
+```text
+transformers[torch]==5.7.0
+```
+
 ## 2026-06-10 — Switch from Docker Space to Gradio ZeroGPU
 
 Decision: use **Gradio ZeroGPU** as the active Hugging Face Space architecture.
