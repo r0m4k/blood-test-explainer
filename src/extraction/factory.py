@@ -1,8 +1,9 @@
 """Backend selection.
 
 `EXTRACTOR_BACKEND` env:
-  - `auto` / `llamacpp-gpu` / `llama-champion`: HF ZeroGPU + llama.cpp GGUF badge path.
-  - `zerogpu` / `transformers`: HF ZeroGPU + official OpenBMB Transformers fallback.
+  - `auto`: Transformers when CUDA is visible, CPU llama.cpp otherwise.
+  - `llamacpp-gpu` / `llama-champion`: llama.cpp GGUF badge path.
+  - `zerogpu` / `transformers`: official OpenBMB Transformers backend.
   - `api`: hosted OpenBMB endpoint (dev fallback only).
   - `local` / `server`: local llama-server backend for local development.
   - `llamacpp`: in-process llama-cpp-python backend for local development.
@@ -13,6 +14,7 @@ from __future__ import annotations
 import os
 
 from src.extraction.base import Extractor
+from src.extraction.auto import AutoExtractor
 from src.extraction.llamacpp_gpu import LlamaCppGPUExtractor
 from src.extraction.local_minicpmv import LocalMiniCPMVExtractor
 from src.extraction.local_server import LocalServerExtractor
@@ -27,8 +29,9 @@ def build_extractor(
 ) -> Extractor:
     backend = os.getenv("EXTRACTOR_BACKEND", "auto").strip().lower()
 
-    if backend in ("auto", "llamacpp-gpu", "gpu-llamacpp", "llama-champion"):
-        # llama.cpp on the ZeroGPU GPU -> earns the Llama Champion badge while staying off-grid.
+    if backend == "auto":
+        return AutoExtractor(model_id=model)
+    if backend in ("llamacpp-gpu", "gpu-llamacpp", "llama-champion"):
         return LlamaCppGPUExtractor()
     if backend in ("zerogpu", "zero-gpu", "transformers"):
         return ZeroGPUTransformersExtractor(model_id=model)

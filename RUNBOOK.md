@@ -1,6 +1,6 @@
-# Runbook — ZeroGPU Extraction + Fine-Tuned Model Swap
+# Runbook — Adaptive Extraction + Fine-Tuned Model Swap
 
-The active deployment path is now **Gradio ZeroGPU**.
+The active deployment path is now **Gradio with adaptive extraction**.
 
 This replaced the Docker + `llama-server` path because ZeroGPU is only available for Gradio SDK Spaces. The Docker build was also failing on free CPU hardware with `OOMKilled`.
 
@@ -9,12 +9,13 @@ This replaced the Docker + `llama-server` path because ZeroGPU is only available
 | Area | Current choice |
 |---|---|
 | Space SDK | `gradio` |
-| Hardware | ZeroGPU |
-| Badge-target runtime | `llama.cpp` through a `llama-cpp-python` build with MiniCPM-V 4.6 support |
-| Badge-target backend | `EXTRACTOR_BACKEND=auto` or `EXTRACTOR_BACKEND=llamacpp-gpu` |
-| Fallback backend | `EXTRACTOR_BACKEND=zerogpu` with Transformers |
-| Model variables | `LLAMACPP_GGUF_REPO`, `LLAMACPP_MODEL_FILE`, `LLAMACPP_MMPROJ_FILE` |
-| Extraction backends | `src/extraction/llamacpp_gpu.py`, `src/extraction/zerogpu_transformers.py` |
+| Hardware | Adaptive: CUDA when available, CPU otherwise |
+| Auto backend | Transformers on CUDA, llama.cpp on CPU |
+| Force llama.cpp | `EXTRACTOR_BACKEND=llamacpp-gpu` |
+| Force Transformers | `EXTRACTOR_BACKEND=zerogpu` or `EXTRACTOR_BACKEND=transformers` |
+| llama.cpp variables | `LLAMACPP_GGUF_REPO`, `LLAMACPP_MODEL_FILE` |
+| Transformers variables | `ZEROGPU_MODEL_ID`, `ZEROGPU_MAX_NEW_TOKENS`, `ZEROGPU_QUANTIZE` |
+| Extraction backends | `src/extraction/auto.py`, `src/extraction/llamacpp_gpu.py`, `src/extraction/zerogpu_transformers.py` |
 | Report enrichment | `src/report_pipeline.py` + `kb/cbc_knowledge_graph.json` |
 
 Do not switch the Space back to Docker unless the project intentionally gives up ZeroGPU.
@@ -23,9 +24,9 @@ Do not switch the Space back to Docker unless the project intentionally gives up
 
 `EXTRACTOR_BACKEND`:
 
-- `auto`: default badge-target path, runs GGUF through `llama.cpp` inside `@spaces.GPU`.
-- `llamacpp-gpu`: explicit alias for the same badge-target path.
-- `zerogpu`: force the ZeroGPU Transformers fallback backend.
+- `auto`: uses the Transformers backend when `torch.cuda.is_available()` is true; otherwise uses the CPU llama.cpp backend.
+- `llamacpp-gpu`: force the GGUF llama.cpp backend.
+- `zerogpu` / `transformers`: force the OpenBMB Transformers backend.
 - `api`: hosted OpenBMB endpoint for development fallback only.
 - `local` / `server` / `llamacpp`: local experimental backends, not the active HF Space path.
 
@@ -51,12 +52,14 @@ Install dependencies from `requirements.txt`, including:
 
 ```text
 spaces
+torch
+transformers
 llama-cpp-python
 ```
 
-The Space build intentionally excludes the heavier Transformers fallback stack from the default
-runtime requirements so the Hugging Face build stays fast. Add backend-specific extras only when
-you are explicitly working on that backend locally.
+The Space installs both runtime lanes so `EXTRACTOR_BACKEND=auto` can choose at runtime. CUDA
+hardware uses the official OpenBMB Transformers path. CPU hardware uses the prebuilt
+`llama-cpp-python` wheel and avoids a source build.
 
 The active llama.cpp path now uses the official prebuilt CPU manylinux wheel for `llama-cpp-python`:
 
@@ -65,11 +68,12 @@ https://github.com/abetlen/llama-cpp-python/releases/download/v0.3.28/llama_cpp_
 ```
 
 This avoids both the CUDA runtime mismatch that was causing the Space to abort on
-`libcudart.so.12` and the slow source build that was timing out on Hugging Face. The current
-pipeline is PDF/text-only, so it keeps the Space on a simpler llama.cpp route without mmproj or
-an image encoder.
+`libcudart.so.12` and the slow source build that was timing out on Hugging Face. The CPU fallback
+is PDF/text-only, so it keeps the Space on a simpler llama.cpp route without mmproj or an image
+encoder.
 
-Both ZeroGPU backends use `@spaces.GPU(duration=120)` for the model generation call.
+The Transformers backend uses `@spaces.GPU(duration=120)` for GPU generation. The llama.cpp CPU
+fallback keeps a longer duration budget because CPU inference is slower.
 
 ## Current Model
 
@@ -79,34 +83,27 @@ Badge-target defaults:
 EXTRACTOR_BACKEND=auto
 LLAMACPP_GGUF_REPO=openbmb/MiniCPM-V-4.6-gguf
 LLAMACPP_MODEL_FILE=MiniCPM-V-4_6-Q4_K_M.gguf
-LLAMACPP_MMPROJ_FILE=mmproj-model-f16.gguf
-```
-
-This is the official OpenBMB GGUF model path. No model files are committed to the Space repo.
-
-Fallback variables if llama.cpp is incompatible on ZeroGPU:
-
-```bash
-EXTRACTOR_BACKEND=zerogpu
 ZEROGPU_MODEL_ID=openbmb/MiniCPM-V-4.6
 ```
+
+No model files are committed to the Space repo.
 
 ## Fine-Tuned Model Swap
 
 When the fine-tuned model is ready:
 
-1. Convert/quantize it to GGUF.
-2. Upload it and the compatible mmproj to a Hugging Face model repo.
-3. Keep the same Gradio + ZeroGPU + llama.cpp architecture.
+1. Upload the fine-tuned Transformers checkpoint to a Hugging Face model repo for the CUDA lane.
+2. Convert/quantize it to GGUF for the CPU llama.cpp lane.
+3. Keep the same Gradio adaptive architecture.
 4. Change only:
 
 ```bash
+ZEROGPU_MODEL_ID=<owner>/<fine-tuned-minicpm-v-transformers-repo>
 LLAMACPP_GGUF_REPO=<owner>/<fine-tuned-minicpm-v-gguf-repo>
 LLAMACPP_MODEL_FILE=<fine-tuned-model>.gguf
-LLAMACPP_MMPROJ_FILE=<compatible-mmproj>.gguf
 ```
 
-Do not add model files to the Space git repo. Do not reintroduce Docker or `llama-server` for the ZeroGPU deployment.
+Do not add model files to the Space git repo. Do not reintroduce Docker or `llama-server` for the Space deployment.
 
 ## Local Development
 
@@ -123,7 +120,7 @@ pip install -r requirements.txt
 EXTRACTOR_BACKEND=auto python app.py
 ```
 
-Local machines without a suitable GPU may be slow or may not have enough memory for full model inference. In that case, test UI/report rendering locally and test extraction on the HF ZeroGPU Space.
+Local machines without a suitable GPU may be slow or may not have enough memory for full model inference. In that case, test UI/report rendering locally and test extraction on the HF Space.
 
 ## Verification
 
@@ -134,4 +131,4 @@ python3 -m py_compile app.py src/*.py src/extraction/*.py
 .venv/bin/python -m pytest tests/test_report_pipeline.py
 ```
 
-Then verify the Space build uses Gradio, not Docker, and that ZeroGPU can be selected in the Space hardware panel.
+Then verify the Space build uses Gradio, not Docker, and that CUDA hardware selects Transformers while CPU hardware selects llama.cpp.

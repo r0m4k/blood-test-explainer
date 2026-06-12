@@ -46,28 +46,27 @@ The knowledge graph is educational context, not diagnosis. The lab-provided refe
 
 ## Hugging Face Space Deployment
 
-The Hugging Face Space is intentionally deployed as a **Gradio ZeroGPU Space**. This is the active
-deployment path.
+The Hugging Face Space is intentionally deployed as a **Gradio Space** with adaptive extraction.
+This is the active deployment path.
 
-The badge-target backend runs the official OpenBMB MiniCPM-V 4.6 GGUF through `llama.cpp`
-inside a ZeroGPU-managed function, using a `llama-cpp-python` build that includes MiniCPM-V 4.6
-mtmd support. The deterministic knowledge-graph
-enrichment and UI rendering stay in normal Gradio/Python code.
+With `EXTRACTOR_BACKEND=auto`, the app checks CUDA availability at runtime. If CUDA is visible, it
+uses the official OpenBMB MiniCPM-V 4.6 Transformers path. If CUDA is not visible, it falls back to
+the CPU `llama.cpp` GGUF path. The deterministic knowledge-graph enrichment and UI rendering stay
+in normal Gradio/Python code.
 
 This workflow should not be further changed back to Docker unless the project intentionally gives up
-ZeroGPU. When the fine-tuned GGUF model is ready, only replace the model variables:
+ZeroGPU. When the fine-tuned models are ready, only replace the model variables:
 
 ```bash
 EXTRACTOR_BACKEND=auto
+ZEROGPU_MODEL_ID=openbmb/MiniCPM-V-4.6
 LLAMACPP_GGUF_REPO=openbmb/MiniCPM-V-4.6-gguf
 LLAMACPP_MODEL_FILE=MiniCPM-V-4_6-Q4_K_M.gguf
-LLAMACPP_MMPROJ_FILE=mmproj-model-f16.gguf
 ```
 
-The future fine-tuned deployment should keep the same Gradio + ZeroGPU + `llama.cpp` architecture
-and only insert the fine-tuned GGUF repository/path into the `LLAMACPP_*` variables. If
-`llama-cpp-python` proves incompatible with MiniCPM-V 4.6 on ZeroGPU, the fallback backend is
-`EXTRACTOR_BACKEND=zerogpu` with `ZEROGPU_MODEL_ID=openbmb/MiniCPM-V-4.6`.
+The future fine-tuned deployment should keep the same Gradio adaptive architecture and only insert
+the fine-tuned Transformers repo into `ZEROGPU_MODEL_ID` and the fine-tuned GGUF repo/path into the
+`LLAMACPP_*` variables.
 
 ## Local Setup
 
@@ -76,15 +75,13 @@ pip install -r requirements.txt
 EXTRACTOR_BACKEND=auto python app.py
 ```
 
-The Space runtime is intentionally slim. The Transformers fallback stack is kept out of the
-default Space dependency set so the build stays faster and more deterministic. The active
-llama.cpp path uses the official prebuilt CPU manylinux wheel for `llama-cpp-python`:
+The Space runtime installs both extraction lanes so `auto` can choose at runtime. The CPU llama.cpp
+path uses the official prebuilt CPU manylinux wheel for `llama-cpp-python`:
 
 ```text
 https://github.com/abetlen/llama-cpp-python/releases/download/v0.3.28/llama_cpp_python-0.3.28-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
 ```
 
 That avoids both the CUDA runtime mismatch that was causing the Space to abort on
-`libcudart.so.12` and the slow source build that was timing out on Hugging Face. The current
-pipeline is PDF/text-only, so the extractor does not load an image encoder or mmproj. Install any
-extra backend-specific packages only when you actually need to run that backend locally.
+`libcudart.so.12` and the slow source build that was timing out on Hugging Face. The CPU fallback is
+PDF/text-only, so the extractor does not load an image encoder or mmproj on CPU.
