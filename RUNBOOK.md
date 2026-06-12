@@ -24,7 +24,7 @@ Do not switch the Space back to Docker unless the project intentionally gives up
 
 `EXTRACTOR_BACKEND`:
 
-- `auto`: uses the Transformers backend when `torch.cuda.is_available()` is true; otherwise uses the CPU llama.cpp backend.
+- `auto`: uses the Transformers backend when `torch.cuda.is_available()` is true; otherwise uses the CPU llama.cpp backend. If the Transformers worker fails, it retries with CPU llama.cpp unless `AUTO_FALLBACK_TO_LLAMACPP=0`.
 - `llamacpp-gpu`: force the GGUF llama.cpp backend.
 - `zerogpu` / `transformers`: force the OpenBMB Transformers backend.
 - `api`: hosted OpenBMB endpoint for development fallback only.

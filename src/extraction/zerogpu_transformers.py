@@ -143,31 +143,37 @@ def _run_zerogpu_generation(
 ) -> str:
     import torch
 
-    processor, model = _get_model(model_id)
-    inputs = processor.apply_chat_template(
-        messages,
-        tokenize=True,
-        add_generation_prompt=True,
-        return_dict=True,
-        return_tensors="pt",
-        downsample_mode=downsample_mode,
-        max_slice_nums=9,
-    ).to(model.device)
-
-    with torch.inference_mode():
-        generated_ids = model.generate(
-            **inputs,
+    try:
+        processor, model = _get_model(model_id)
+        inputs = processor.apply_chat_template(
+            messages,
+            tokenize=True,
+            add_generation_prompt=True,
+            return_dict=True,
+            return_tensors="pt",
             downsample_mode=downsample_mode,
-            max_new_tokens=max_new_tokens,
-            do_sample=False,
-        )
+            max_slice_nums=9,
+        ).to(model.device)
 
-    generated_ids_trimmed = [
-        out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, generated_ids, strict=False)
-    ]
-    output_text = processor.batch_decode(
-        generated_ids_trimmed,
-        skip_special_tokens=True,
-        clean_up_tokenization_spaces=False,
-    )
-    return str(output_text[0]).strip() if output_text else ""
+        with torch.inference_mode():
+            generated_ids = model.generate(
+                **inputs,
+                downsample_mode=downsample_mode,
+                max_new_tokens=max_new_tokens,
+                do_sample=False,
+            )
+
+        generated_ids_trimmed = [
+            out_ids[len(in_ids) :] for in_ids, out_ids in zip(inputs.input_ids, generated_ids, strict=False)
+        ]
+        output_text = processor.batch_decode(
+            generated_ids_trimmed,
+            skip_special_tokens=True,
+            clean_up_tokenization_spaces=False,
+        )
+        return str(output_text[0]).strip() if output_text else ""
+    except Exception as exc:
+        raise RuntimeError(
+            "OpenBMB Transformers generation failed on the CUDA/ZeroGPU lane. "
+            f"Inner error: {type(exc).__name__}: {exc}"
+        ) from exc

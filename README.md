@@ -51,7 +51,8 @@ This is the active deployment path.
 
 With `EXTRACTOR_BACKEND=auto`, the app checks CUDA availability at runtime. If CUDA is visible, it
 uses the official OpenBMB MiniCPM-V 4.6 Transformers path. If CUDA is not visible, it falls back to
-the CPU `llama.cpp` GGUF path. The deterministic knowledge-graph enrichment and UI rendering stay
+the CPU `llama.cpp` GGUF path. If the CUDA worker fails, `auto` retries with CPU llama.cpp unless
+`AUTO_FALLBACK_TO_LLAMACPP=0`. The deterministic knowledge-graph enrichment and UI rendering stay
 in normal Gradio/Python code.
 
 This workflow should not be further changed back to Docker unless the project intentionally gives up
