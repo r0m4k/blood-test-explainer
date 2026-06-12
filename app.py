@@ -4,6 +4,9 @@ import os
 import re
 import time
 import traceback
+import base64
+import io
+from pathlib import Path
 from html import escape
 from typing import Any
 
@@ -187,39 +190,66 @@ def upload_state(uploaded_file: str | None) -> tuple[Any, Any]:
         )
 
     filename = os.path.basename(uploaded_file)
+    preview_data_url = _uploaded_file_preview_data_url(uploaded_file)
     return (
         gr.update(visible=False),
-        gr.update(visible=True, value=selected_document_html(filename)),
+        gr.update(visible=True, value=selected_document_html(filename, preview_data_url)),
         workflow_phase_html("processing"),
     )
 
 
-def selected_document_html(filename: str | None = None) -> str:
+def selected_document_html(filename: str | None = None, preview_data_url: str | None = None) -> str:
     if not filename:
         filename = "Document ready"
-    return f"""
-    <section class="bte-selected-document">
-      <div class="bte-selected-preview" aria-hidden="true">
-        <div class="bte-selected-preview-frame">
+    preview_markup = (
+        f'<img class="bte-upload-preview-image" src="{escape(preview_data_url)}" alt="Uploaded document preview">'
+        if preview_data_url
+        else """
+        <div class="bte-upload-preview-placeholder">
           <div class="bte-selected-preview-header">
             <span></span><span></span><span></span>
           </div>
-          <div class="bte-selected-preview-body">
-            <div class="bte-preview-line bte-preview-line--title"></div>
-            <div class="bte-preview-line bte-preview-line--lg"></div>
-            <div class="bte-preview-line bte-preview-line--md"></div>
-            <div class="bte-preview-line bte-preview-line--sm"></div>
-            <div class="bte-preview-grid">
-              <span></span><span></span><span></span>
-              <span></span><span></span><span></span>
-            </div>
-            <div class="bte-preview-watermark">{escape(filename)}</div>
-          </div>
         </div>
+        """
+    )
+    return f"""
+    <section class="bte-selected-document">
+      <div class="bte-selected-preview" aria-hidden="true">
+        {preview_markup}
         <div class="bte-selected-preview-overlay"></div>
+        <div class="bte-preview-watermark">{escape(filename)}</div>
       </div>
     </section>
     """
+
+
+def _uploaded_file_preview_data_url(uploaded_file: str) -> str | None:
+    path = Path(uploaded_file)
+    suffix = path.suffix.lower()
+
+    if suffix in {".png", ".jpg", ".jpeg", ".webp", ".tif", ".tiff"}:
+        from PIL import Image, ImageOps
+
+        with Image.open(path) as image:
+            image = ImageOps.exif_transpose(image).convert("RGB")
+            image.thumbnail((1200, 1200))
+            buffer = io.BytesIO()
+            image.save(buffer, format="JPEG", quality=86, optimize=True)
+            encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+            return f"data:image/jpeg;base64,{encoded}"
+
+    if suffix == ".pdf":
+        import fitz
+
+        with fitz.open(path) as document:
+            if document.page_count == 0:
+                return None
+            page = document.load_page(0)
+            pixmap = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
+            encoded = base64.b64encode(pixmap.tobytes("png")).decode("ascii")
+            return f"data:image/png;base64,{encoded}"
+
+    return None
 
 
 def empty_report_html(
@@ -1749,10 +1779,23 @@ gradio-app,
   overflow: hidden;
 }
 
-.bte-selected-preview-frame {
+.bte-upload-preview-image,
+.bte-upload-preview-placeholder {
   position: absolute;
   inset: 18px;
   border-radius: 20px;
+}
+
+.bte-upload-preview-image {
+  width: calc(100% - 36px);
+  height: calc(100% - 36px);
+  object-fit: cover;
+  filter: blur(1.8px) saturate(0.78) contrast(0.92);
+  transform: scale(1.03);
+  box-shadow: 0 16px 35px rgba(18, 32, 56, 0.08);
+}
+
+.bte-upload-preview-placeholder {
   background:
     linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(245, 248, 252, 0.96));
   border: 1px solid rgba(217, 226, 238, 0.82);
@@ -1819,7 +1862,10 @@ gradio-app,
 }
 
 .bte-preview-watermark {
-  margin-top: 18px;
+  position: absolute;
+  left: 34px;
+  right: 34px;
+  bottom: 28px;
   color: rgba(17, 24, 39, 0.2);
   font-size: 18px;
   font-weight: 700;
