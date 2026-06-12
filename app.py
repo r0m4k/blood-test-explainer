@@ -1303,6 +1303,15 @@ gradio-app,
   box-shadow: none !important;
 }
 
+.bte-final-row,
+.bte-final-row > div,
+.bte-final-row .prose,
+.bte-final-row .html-container,
+.bte-final-row .block {
+  min-height: 0 !important;
+  height: auto !important;
+}
+
 .bte-status-row .prose,
 .bte-status-row .html-container,
 .bte-status-row .block,
@@ -2603,7 +2612,8 @@ button.bte-action *,
   max-width: var(--bte-rail) !important;
   margin: 0 auto !important;
   background: rgb(248, 249, 252) !important;
-  gap: 10px;
+  align-content: start;
+  gap: 12px;
 }
 
 .bte-final-report .bte-ideal-marker {
@@ -2652,15 +2662,11 @@ button.bte-action *,
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
-  margin: -8px 0 0;
+  margin: 0;
 }
 
 .bte-ideal-filter {
-  position: absolute;
-  inline-size: 1px;
-  block-size: 1px;
-  opacity: 0;
-  pointer-events: none;
+  display: none !important;
 }
 
 .bte-ideal-stat {
