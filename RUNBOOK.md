@@ -65,8 +65,9 @@ https://github.com/abetlen/llama-cpp-python/releases/download/v0.3.28/llama_cpp_
 ```
 
 This avoids both the CUDA runtime mismatch that was causing the Space to abort on
-`libcudart.so.12` and the slow source build that was timing out on Hugging Face. It keeps the
-Space on the more portable GGUF + llama.cpp route.
+`libcudart.so.12` and the slow source build that was timing out on Hugging Face. The current
+pipeline is PDF/text-only, so it keeps the Space on a simpler llama.cpp route without mmproj or
+an image encoder.
 
 Both ZeroGPU backends use `@spaces.GPU(duration=120)` for the model generation call.
 

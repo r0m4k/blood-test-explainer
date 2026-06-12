@@ -85,5 +85,6 @@ https://github.com/abetlen/llama-cpp-python/releases/download/v0.3.28/llama_cpp_
 ```
 
 That avoids both the CUDA runtime mismatch that was causing the Space to abort on
-`libcudart.so.12` and the slow source build that was timing out on Hugging Face. Install any
+`libcudart.so.12` and the slow source build that was timing out on Hugging Face. The current
+pipeline is PDF/text-only, so the extractor does not load an image encoder or mmproj. Install any
 extra backend-specific packages only when you actually need to run that backend locally.
