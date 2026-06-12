@@ -205,6 +205,7 @@ def selected_document_html(filename: str | None = None) -> str:
             <span></span><span></span><span></span>
           </div>
           <div class="bte-selected-preview-body">
+            <div class="bte-preview-line bte-preview-line--title"></div>
             <div class="bte-preview-line bte-preview-line--lg"></div>
             <div class="bte-preview-line bte-preview-line--md"></div>
             <div class="bte-preview-line bte-preview-line--sm"></div>
@@ -212,13 +213,10 @@ def selected_document_html(filename: str | None = None) -> str:
               <span></span><span></span><span></span>
               <span></span><span></span><span></span>
             </div>
+            <div class="bte-preview-watermark">{escape(filename)}</div>
           </div>
         </div>
         <div class="bte-selected-preview-overlay"></div>
-      </div>
-      <div class="bte-selected-meta">
-        <p class="bte-kicker">Document loaded</p>
-        <h3>{escape(filename)}</h3>
       </div>
     </section>
     """
@@ -1755,10 +1753,11 @@ gradio-app,
   position: absolute;
   inset: 18px;
   border-radius: 20px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(245, 248, 252, 0.95));
-  border: 1px solid rgba(217, 226, 238, 0.75);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.97), rgba(245, 248, 252, 0.96));
+  border: 1px solid rgba(217, 226, 238, 0.82);
   box-shadow: 0 16px 35px rgba(18, 32, 56, 0.08);
-  filter: blur(0.15px);
+  filter: blur(0.35px);
 }
 
 .bte-selected-preview-header {
@@ -1781,9 +1780,16 @@ gradio-app,
 .bte-preview-line {
   height: 14px;
   border-radius: 999px;
-  background: linear-gradient(90deg, rgba(27, 76, 161, 0.18), rgba(23, 161, 122, 0.18));
-  filter: blur(1px);
+  background: linear-gradient(90deg, rgba(27, 76, 161, 0.26), rgba(23, 161, 122, 0.22));
+  filter: blur(1.2px);
   margin-bottom: 14px;
+}
+
+.bte-preview-line--title {
+  width: 64%;
+  height: 22px;
+  margin-bottom: 18px;
+  background: linear-gradient(90deg, rgba(17, 24, 39, 0.18), rgba(37, 99, 235, 0.16));
 }
 
 .bte-preview-line--lg {
@@ -1808,29 +1814,28 @@ gradio-app,
 .bte-preview-grid span {
   height: 34px;
   border-radius: 10px;
-  background: rgba(36, 105, 235, 0.08);
-  filter: blur(1px);
+  background: rgba(36, 105, 235, 0.12);
+  filter: blur(1.2px);
+}
+
+.bte-preview-watermark {
+  margin-top: 18px;
+  color: rgba(17, 24, 39, 0.2);
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .bte-selected-preview-overlay {
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.1)),
-    radial-gradient(circle at 50% 46%, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0) 36%);
-  backdrop-filter: blur(2.5px);
-}
-
-.bte-selected-meta {
-  display: none;
-}
-
-.bte-selected-document h3 {
-  margin: 0 0 6px !important;
-  color: var(--bte-ink) !important;
-  font-size: 22px !important;
-  line-height: 1.15 !important;
-  overflow-wrap: anywhere;
+    linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.04)),
+    radial-gradient(circle at 50% 46%, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 40%);
+  backdrop-filter: blur(1.8px);
 }
 
 .bte-selected-document p:last-child {
