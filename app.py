@@ -172,8 +172,8 @@ def workflow_arrow_html(kind: str) -> str:
 def show_processing() -> tuple[str, Any, str, str]:
     return (
         _status_html("Reading document", "Extracting patient context and markers, then matching them to the knowledge graph.", tone="loading"),
-        gr.update(visible=True),
-        loading_report_html(),
+        gr.update(visible=False),
+        "",
         workflow_phase_html("processing"),
     )
 
