@@ -199,13 +199,26 @@ def selected_document_html(filename: str | None = None) -> str:
         filename = "Document ready"
     return f"""
     <section class="bte-selected-document">
-      <div class="bte-selected-icon" aria-hidden="true">
-        <span></span>
+      <div class="bte-selected-preview" aria-hidden="true">
+        <div class="bte-selected-preview-frame">
+          <div class="bte-selected-preview-header">
+            <span></span><span></span><span></span>
+          </div>
+          <div class="bte-selected-preview-body">
+            <div class="bte-preview-line bte-preview-line--lg"></div>
+            <div class="bte-preview-line bte-preview-line--md"></div>
+            <div class="bte-preview-line bte-preview-line--sm"></div>
+            <div class="bte-preview-grid">
+              <span></span><span></span><span></span>
+              <span></span><span></span><span></span>
+            </div>
+          </div>
+        </div>
+        <div class="bte-selected-preview-overlay"></div>
       </div>
-      <div>
+      <div class="bte-selected-meta">
         <p class="bte-kicker">Document loaded</p>
         <h3>{escape(filename)}</h3>
-        <p>Ready to extract markers, patient context, values, units, ranges, and confidence signals.</p>
       </div>
     </section>
     """
@@ -1719,14 +1732,97 @@ gradio-app,
 
 .bte-selected-document {
   display: grid;
-  grid-template-columns: 68px minmax(0, 1fr);
-  gap: 16px;
-  align-items: center;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 14px;
+  align-items: stretch;
   min-height: 220px;
   border: 1px solid #d8e2ee;
   border-radius: 18px;
   padding: 22px;
   background: var(--bte-surface);
+}
+
+.bte-selected-preview {
+  position: relative;
+  min-height: 260px;
+  border-radius: 22px;
+  border: 1px solid rgba(216, 226, 238, 0.9);
+  background: linear-gradient(180deg, rgba(248, 249, 252, 0.95), rgba(255, 255, 255, 0.98));
+  overflow: hidden;
+}
+
+.bte-selected-preview-frame {
+  position: absolute;
+  inset: 18px;
+  border-radius: 20px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(245, 248, 252, 0.95));
+  border: 1px solid rgba(217, 226, 238, 0.75);
+  box-shadow: 0 16px 35px rgba(18, 32, 56, 0.08);
+  filter: blur(0.15px);
+}
+
+.bte-selected-preview-header {
+  display: flex;
+  gap: 6px;
+  padding: 18px 20px 0;
+}
+
+.bte-selected-preview-header span {
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  background: rgba(95, 126, 180, 0.18);
+}
+
+.bte-selected-preview-body {
+  padding: 22px 22px 20px;
+}
+
+.bte-preview-line {
+  height: 14px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(27, 76, 161, 0.18), rgba(23, 161, 122, 0.18));
+  filter: blur(1px);
+  margin-bottom: 14px;
+}
+
+.bte-preview-line--lg {
+  width: 78%;
+}
+
+.bte-preview-line--md {
+  width: 54%;
+}
+
+.bte-preview-line--sm {
+  width: 39%;
+}
+
+.bte-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.bte-preview-grid span {
+  height: 34px;
+  border-radius: 10px;
+  background: rgba(36, 105, 235, 0.08);
+  filter: blur(1px);
+}
+
+.bte-selected-preview-overlay {
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.1)),
+    radial-gradient(circle at 50% 46%, rgba(255, 255, 255, 0.36), rgba(255, 255, 255, 0) 36%);
+  backdrop-filter: blur(2.5px);
+}
+
+.bte-selected-meta {
+  display: none;
 }
 
 .bte-selected-document h3 {
