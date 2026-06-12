@@ -17,6 +17,8 @@ Config (env):
   LLAMACPP_CHAT_HANDLER llama_cpp chat-handler class (default MiniCPMv26ChatHandler; confirm the
                         4.6 handler shipped with your llama-cpp-python build)
   LLAMACPP_MAX_TOKENS   default 3072
+  LLAMACPP_N_CTX        default 8192
+  LLAMACPP_N_GPU_LAYERS default 0 for CPU wheels; set to -1 only on CUDA builds
 """
 
 from __future__ import annotations
@@ -61,6 +63,8 @@ class LlamaCppGPUExtractor:
         self.model_file = os.getenv("LLAMACPP_MODEL_FILE", DEFAULT_MODEL_FILE).strip()
         self.mmproj_file = os.getenv("LLAMACPP_MMPROJ_FILE", DEFAULT_MMPROJ_FILE).strip()
         self.max_tokens = int(os.getenv("LLAMACPP_MAX_TOKENS", "3072"))
+        self.n_ctx = int(os.getenv("LLAMACPP_N_CTX", "8192"))
+        self.n_gpu_layers = int(os.getenv("LLAMACPP_N_GPU_LAYERS", "0"))
         self.chat_handler = os.getenv("LLAMACPP_CHAT_HANDLER", "MiniCPMv26ChatHandler").strip()
 
     def extract(self, file_path: str, max_pages: int = 3) -> ExtractionResult:
@@ -72,6 +76,8 @@ class LlamaCppGPUExtractor:
             mmproj_file=self.mmproj_file,
             chat_handler=self.chat_handler,
             max_tokens=self.max_tokens,
+            n_ctx=self.n_ctx,
+            n_gpu_layers=self.n_gpu_layers,
         )
         parsed = _parse_json_response(raw)
         return ExtractionResult(
@@ -98,7 +104,7 @@ def _download(repo: str, model_file: str, mmproj_file: str) -> tuple[str, str]:
 
 
 @lru_cache(maxsize=1)
-def _load(model_path: str, mmproj_path: str, chat_handler_name: str):
+def _load(model_path: str, mmproj_path: str, chat_handler_name: str, n_ctx: int, n_gpu_layers: int):
     from llama_cpp import Llama, llama_chat_format
 
     handler_cls = getattr(llama_chat_format, chat_handler_name, None)
@@ -111,8 +117,8 @@ def _load(model_path: str, mmproj_path: str, chat_handler_name: str):
     return Llama(
         model_path=model_path,
         chat_handler=handler,
-        n_ctx=4096,
-        n_gpu_layers=-1,   # offload everything to the ZeroGPU CUDA device
+        n_ctx=n_ctx,
+        n_gpu_layers=n_gpu_layers,
         verbose=False,
     )
 
@@ -125,6 +131,8 @@ def _run_llamacpp_generation(
     mmproj_file: str,
     chat_handler: str,
     max_tokens: int,
+    n_ctx: int,
+    n_gpu_layers: int,
 ) -> str:
     try:
         model_path, mmproj_path = _download(repo, model_file, mmproj_file)
@@ -135,7 +143,7 @@ def _run_llamacpp_generation(
         ) from exc
 
     try:
-        llm = _load(model_path, mmproj_path, chat_handler)
+        llm = _load(model_path, mmproj_path, chat_handler, n_ctx, n_gpu_layers)
     except Exception as exc:
         raise RuntimeError(
             "The llama.cpp backend could not load the MiniCPM-V GGUF/mmproj pair. "
@@ -154,7 +162,14 @@ def _run_llamacpp_generation(
         )
         return response["choices"][0]["message"].get("content") or "{}"
     except Exception as exc:
+        message = f"{type(exc).__name__}: {exc}"
+        if "llama_decode returned -1" in message:
+            raise RuntimeError(
+                "llama.cpp ran out of room while decoding the multimodal prompt. "
+                "Try increasing LLAMACPP_N_CTX, lowering the number of pages, or using a CUDA "
+                "wheel with LLAMACPP_N_GPU_LAYERS=-1 only when the runtime actually has CUDA."
+            ) from exc
         raise RuntimeError(
             "llama.cpp generation failed while extracting the document. "
-            f"Inner error: {type(exc).__name__}: {exc}"
+            f"Inner error: {message}"
         ) from exc
