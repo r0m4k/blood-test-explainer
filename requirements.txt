@@ -4,8 +4,13 @@ requests==2.32.5
 pillow==12.0.0
 pymupdf==1.26.6
 json-repair==0.60.1
-huggingface_hub==1.19.0
 
-# Active HF Space path: run the official OpenBMB GGUF through llama.cpp on ZeroGPU.
-# Keep this pinned to a wheel release so the Space build avoids Git-based source resolution.
-llama-cpp-python==0.3.28
+# Active HF Space path: ZeroGPU + Transformers running the fine-tuned MiniCPM-V model
+# (EXTRACTOR_BACKEND defaults to zerogpu; ZEROGPU_MODEL_ID points at the merged model). All wheels —
+# no source builds — so the Space build doesn't time out. (llama.cpp is a separate, undeployed path.)
+accelerate
+bitsandbytes
+torch
+torchvision
+av
+transformers[torch]>=5.7.0
