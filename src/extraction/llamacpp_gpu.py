@@ -150,7 +150,6 @@ def _run_llamacpp_generation(
             messages=[{"role": "user", "content": [{"type": "text", "text": EXTRACTION_PROMPT}, *parts]}],
             response_format={"type": "json_object"},
             temperature=0.0,
-            reasoning_budget=0,
             max_tokens=max_tokens,
         )
         return response["choices"][0]["message"].get("content") or "{}"
