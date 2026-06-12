@@ -58,6 +58,15 @@ The Space build intentionally excludes the heavier Transformers fallback stack f
 runtime requirements so the Hugging Face build stays fast. Add backend-specific extras only when
 you are explicitly working on that backend locally.
 
+The active llama.cpp path pulls `llama-cpp-python` from the official prebuilt CUDA wheel index:
+
+```text
+https://abetlen.github.io/llama-cpp-python/whl/cu132
+```
+
+This avoids the source-build path that was causing the Space build to stall on wheel
+compilation.
+
 Both ZeroGPU backends use `@spaces.GPU(duration=120)` for the model generation call.
 
 ## Current Model
