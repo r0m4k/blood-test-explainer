@@ -2524,9 +2524,9 @@ button.bte-action *,
   max-width: 100% !important;
   margin-left: auto !important;
   margin-right: auto !important;
-  margin-top: 12px;
+  margin-top: 0;
   display: grid;
-  gap: 10px;
+  gap: 0;
   background: var(--bte-page);
 }
 
@@ -2535,7 +2535,7 @@ button.bte-action *,
   max-width: var(--bte-rail) !important;
   margin: 0 auto !important;
   background: rgb(248, 249, 252) !important;
-  gap: 8px;
+  gap: 0;
 }
 
 .bte-final-report .bte-ideal-marker {
@@ -2552,7 +2552,7 @@ button.bte-action *,
   align-items: center;
   justify-content: space-between;
   gap: 22px;
-  padding: 26px 28px 24px;
+  padding: 24px 28px 14px;
   border: 1px solid rgba(255, 255, 255, 0.42);
   border-radius: var(--bte-radius);
   color: #ffffff;
@@ -2584,7 +2584,7 @@ button.bte-action *,
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
-  margin: -2px 0 0;
+  margin: -10px 0 0;
 }
 
 .bte-ideal-filter {
@@ -2675,6 +2675,7 @@ button.bte-action *,
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: start;
   gap: 12px;
+  margin-top: -2px;
 }
 
 .bte-ideal-column {
