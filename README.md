@@ -78,6 +78,12 @@ EXTRACTOR_BACKEND=auto python app.py
 
 The Space runtime is intentionally slim. The Transformers fallback stack is kept out of the
 default Space dependency set so the build stays faster and more deterministic. The active
-llama.cpp path uses the official prebuilt CUDA wheel index for `llama-cpp-python` so the Space
-avoids building that package from source during deployment. Install any extra backend-specific
-packages only when you actually need to run that backend locally.
+llama.cpp path uses the official prebuilt CPU manylinux wheel for `llama-cpp-python`:
+
+```text
+https://github.com/abetlen/llama-cpp-python/releases/download/v0.3.28/llama_cpp_python-0.3.28-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
+```
+
+That avoids both the CUDA runtime mismatch that was causing the Space to abort on
+`libcudart.so.12` and the slow source build that was timing out on Hugging Face. Install any
+extra backend-specific packages only when you actually need to run that backend locally.

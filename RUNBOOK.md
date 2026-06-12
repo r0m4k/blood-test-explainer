@@ -58,8 +58,14 @@ The Space build intentionally excludes the heavier Transformers fallback stack f
 runtime requirements so the Hugging Face build stays fast. Add backend-specific extras only when
 you are explicitly working on that backend locally.
 
-The active llama.cpp path now uses the standard CPU wheel for `llama-cpp-python`. This avoids
-the CUDA runtime mismatch that was causing the Space to abort on `libcudart.so.12` and keeps the
+The active llama.cpp path now uses the official prebuilt CPU manylinux wheel for `llama-cpp-python`:
+
+```text
+https://github.com/abetlen/llama-cpp-python/releases/download/v0.3.28/llama_cpp_python-0.3.28-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
+```
+
+This avoids both the CUDA runtime mismatch that was causing the Space to abort on
+`libcudart.so.12` and the slow source build that was timing out on Hugging Face. It keeps the
 Space on the more portable GGUF + llama.cpp route.
 
 Both ZeroGPU backends use `@spaces.GPU(duration=120)` for the model generation call.
