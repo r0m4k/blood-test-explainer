@@ -185,6 +185,7 @@ def upload_state(uploaded_file: str | None) -> tuple[Any, Any]:
     if not uploaded_file:
         return (
             gr.update(visible=True),
+            gr.update(value='<p class="bte-upload-hint">Supported formats: PDF</p>', visible=True),
             gr.update(visible=False, value=selected_document_html()),
             workflow_phase_html("ready"),
         )
@@ -193,6 +194,7 @@ def upload_state(uploaded_file: str | None) -> tuple[Any, Any]:
     preview_data_url = _uploaded_file_preview_data_url(uploaded_file)
     return (
         gr.update(visible=False),
+        gr.update(value="", visible=False),
         gr.update(visible=True, value=selected_document_html(filename, preview_data_url)),
         workflow_phase_html("processing"),
     )
@@ -3204,7 +3206,7 @@ with gr.Blocks(title="Blood Test Explainer") as demo:
         with gr.Column(scale=4, min_width=320, elem_classes=["bte-workflow-panel", "bte-panel-upload"]):
             with gr.Group(elem_classes=["bte-shell", "bte-upload-card"]):
                 gr.HTML(
-                    '<p class="bte-upload-hint">Supported formats: PDF, PNG, JPEG</p>',
+                    '<p class="bte-upload-hint">Supported formats: PDF</p>',
                     elem_classes=["bte-upload-hint-wrap"],
                 )
                 with gr.Group() as upload_dropzone:
