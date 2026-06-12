@@ -117,7 +117,7 @@ def _load(model_path: str, mmproj_path: str, chat_handler_name: str):
     )
 
 
-@spaces.GPU(duration=120)
+@spaces.GPU(duration=600)
 def _run_llamacpp_generation(
     parts: list[dict[str, Any]],
     repo: str,
