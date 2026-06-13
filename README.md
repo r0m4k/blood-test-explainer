@@ -1,3 +1,16 @@
+---
+title: Blood Test Explainer
+emoji: 📊
+colorFrom: green
+colorTo: blue
+sdk: gradio
+sdk_version: 6.17.3
+python_version: "3.10.13"
+app_file: app.py
+pinned: false
+startup_duration_timeout: 1h
+---
+
 # Blood Test Explainer, teaching a 1.3B model to read your lab report, offline
 
 We are **Roman and Dimitris**, graduates of the **American College of Greece (Deree) AI Lab**, where we currently do research. We built *Blood Test Explainer* for the Build Small hackathon. You upload a photo or PDF of a blood test, and a small model running entirely on the Space reads it, pulls out the markers, values and reference ranges, and explains what each one means in plain language, grounded in a medical knowledge base.
