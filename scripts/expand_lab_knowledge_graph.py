@@ -30,6 +30,9 @@ MARKER_IDS: dict[str, str] = {
     "Absolute Eosinophil Count": "eos_absolute",
     "Absolute Basophil Count": "bas_absolute",
     "Reticulocyte Count": "reticulocyte_count",
+    "Haptoglobin": "haptoglobin",
+    "G6PD": "g6pd",
+    "Erythropoietin": "erythropoietin",
     "Glucose": "glucose",
     "Creatinine": "creatinine",
     "eGFR": "egfr",
@@ -48,15 +51,20 @@ MARKER_IDS: dict[str, str] = {
     "Uric Acid": "uric_acid",
     "Serum Iron": "serum_iron",
     "TIBC": "tibc",
+    "Transferrin": "transferrin",
     "Transferrin Saturation": "transferrin_saturation",
     "LDH": "ldh",
     "Osmolality": "osmolality",
     "Ammonia": "ammonia",
     "Lactate": "lactate",
     "Homocysteine": "homocysteine",
+    "Methylmalonic Acid": "methylmalonic_acid",
     "Cystatin C": "cystatin_c",
     "Prealbumin": "prealbumin",
     "Beta-2 Microglobulin": "beta_2_microglobulin",
+    "C-Peptide": "c_peptide",
+    "Fructosamine": "fructosamine",
+    "Beta-Hydroxybutyrate": "beta_hydroxybutyrate",
     "HbA1c": "hba1c",
     "ALT": "alt",
     "AST": "ast",
@@ -80,9 +88,16 @@ MARKER_IDS: dict[str, str] = {
     "Total T4": "total_t4",
     "Total T3": "total_t3",
     "Anti-TPO Antibodies": "anti_tpo_antibodies",
+    "TSH Receptor Antibodies": "tsh_receptor_antibodies",
+    "Thyroglobulin Antibodies": "thyroglobulin_antibodies",
     "Vitamin D": "vitamin_d",
     "Vitamin B12": "vitamin_b12",
     "Ferritin": "ferritin",
+    "Zinc": "zinc",
+    "Copper": "copper",
+    "Ceruloplasmin": "ceruloplasmin",
+    "Selenium": "selenium",
+    "Vitamin E": "vitamin_e",
     "Prothrombin Time": "prothrombin_time",
     "INR": "inr",
     "aPTT": "aptt",
@@ -95,10 +110,17 @@ MARKER_IDS: dict[str, str] = {
     "Complement C3": "complement_c3",
     "Complement C4": "complement_c4",
     "Rheumatoid Factor": "rheumatoid_factor",
+    "Anti-CCP Antibodies": "anti_ccp_antibodies",
+    "Immunoglobulin G": "immunoglobulin_g",
+    "Immunoglobulin A": "immunoglobulin_a",
+    "Immunoglobulin M": "immunoglobulin_m",
+    "Immunoglobulin E": "immunoglobulin_e",
     "BNP": "bnp",
+    "NT-proBNP": "nt_probnp",
     "Troponin I": "troponin_i",
     "Creatine Kinase": "creatine_kinase",
     "CK-MB": "ck_mb",
+    "Myoglobin": "myoglobin",
     "Cortisol": "cortisol",
     "Insulin": "insulin",
     "Testosterone": "testosterone",
@@ -109,15 +131,24 @@ MARKER_IDS: dict[str, str] = {
     "Progesterone": "progesterone",
     "Parathyroid Hormone": "pth",
     "ACTH": "acth",
+    "DHEA-S": "dhea_s",
+    "Androstenedione": "androstenedione",
+    "Anti-Mullerian Hormone": "anti_mullerian_hormone",
+    "Beta-hCG": "beta_hcg",
     "SHBG": "shbg",
     "IGF-1": "igf_1",
     "PSA": "psa",
+    "CEA": "cea",
+    "CA-125": "ca_125",
+    "CA 19-9": "ca_19_9",
+    "Alpha-Fetoprotein": "alpha_fetoprotein",
+    "CA 15-3": "ca_15_3",
     "Folate": "folate",
     "Vitamin A": "vitamin_a",
 }
 
 EXTRA_ALIAS_UPDATES: dict[str, list[str]] = {
-    "gra_absolute": ["ANC", "Absolute Neutrophil Count", "Abs Neutrophils", "Neutrophils Absolute"],
+    "gra_absolute": ["Absolute Granulocyte Count", "Granulocytes Absolute", "Abs Granulocytes"],
     "neu_absolute": ["ANC", "Absolute Neutrophil Count", "Abs Neutrophils", "Neutrophils Absolute"],
     "mon_absolute": ["AMC", "Absolute Monocyte Count", "Abs Monocytes", "Monocytes Absolute"],
     "eos_absolute": ["AEC", "Absolute Eosinophil Count", "Abs Eosinophils", "Eosinophils Absolute"],
@@ -335,9 +366,9 @@ def _why_important(name: str, kb_entry: Any) -> str:
         return f"Abnormal {name} values can be clinically meaningful and should be interpreted with symptoms, history, and related tests."
     parts = []
     if kb_entry.high:
-        parts.append(f"A high value may be associated with {kb_entry.high[0].lower()}{kb_entry.high[1:]}")
+        parts.append(kb_entry.high)
     if kb_entry.low:
-        parts.append(f"A low value may be associated with {kb_entry.low[0].lower()}{kb_entry.low[1:]}")
+        parts.append(kb_entry.low)
     return " ".join(parts) if parts else f"{name} helps clinicians evaluate related organ systems and disease patterns."
 
 
@@ -376,6 +407,27 @@ def _merge_aliases(test: dict[str, Any], extra: list[str]) -> None:
     test["aliases"] = aliases
 
 
+def _remove_aliases(test: dict[str, Any], stale: set[str]) -> None:
+    test["aliases"] = [alias for alias in test.get("aliases", []) if alias.casefold() not in stale]
+
+
+def _refresh_generated_fields(test: dict[str, Any], marker: Any, test_id: str, video_url: str, kb_entry: Any) -> None:
+    rebuilt = _build_test(marker, test_id, video_url, kb_entry)
+    for key in (
+        "display_name",
+        "category",
+        "unit",
+        "description",
+        "why_important",
+        "sex_significance",
+        "instructions_to_improve",
+        "statistics_per_group_age",
+        "video_url",
+    ):
+        test[key] = rebuilt[key]
+    _merge_aliases(test, rebuilt["aliases"])
+
+
 def main() -> None:
     import sys
 
@@ -396,7 +448,7 @@ def main() -> None:
         kb_entry = KB.get(marker.name)
         if test_id in existing_by_id:
             test = existing_by_id[test_id]
-            test["video_url"] = video_url
+            _refresh_generated_fields(test, marker, test_id, video_url, kb_entry)
             _merge_aliases(test, list(marker.aliases))
             continue
         existing_by_id[test_id] = _build_test(marker, test_id, video_url, kb_entry)
@@ -406,6 +458,17 @@ def main() -> None:
         if legacy_id in existing_by_id:
             existing_by_id[legacy_id]["video_url"] = videos.get(legacy_id, existing_by_id[legacy_id].get("video_url", ""))
             _merge_aliases(existing_by_id[legacy_id], EXTRA_ALIAS_UPDATES.get(legacy_id, []))
+            if legacy_id == "gra_absolute":
+                _remove_aliases(
+                    existing_by_id[legacy_id],
+                    {
+                        "anc",
+                        "anc when neutrophil-dominant",
+                        "absolute neutrophil count",
+                        "abs neutrophils",
+                        "neutrophils absolute",
+                    },
+                )
 
     for test_id, extra_aliases in EXTRA_ALIAS_UPDATES.items():
         if test_id in existing_by_id:
