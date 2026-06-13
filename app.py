@@ -2407,6 +2407,34 @@ gradio-app,
   white-space: pre-wrap;
 }
 
+.bte-trace-explanation {
+  margin: 0 0 8px;
+  color: #1f2937;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.bte-trace-result {
+  margin: 0 0 8px;
+  color: #475569;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.bte-trace-technical {
+  display: grid;
+  gap: 8px;
+}
+
+.bte-trace-technical-text {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 12px;
+  line-height: 1.45;
+  color: #334155;
+}
+
 .bte-trace-subdetails {
   margin-top: 8px;
   border: 1px solid #e5e7eb;

@@ -80,6 +80,20 @@ def test_trace_to_html_collapsible_steps():
     assert "Return code" in html
     assert "bte-trace-status--complete" in html
     assert "Full prompt" in html
+    assert "bte-trace-explanation" in html
+    assert "Technical details" in html
+    assert "This step gets your upload ready for the AI." in html
+    assert "In this run:" in html
+
+
+def test_completed_steps_include_technical_details():
+    extraction = _sample_extraction()
+    report = build_health_report(extraction)
+    steps = build_pipeline_trace(extraction, report, source_path="/tmp/report.pdf")
+    intake = steps[0]
+    assert intake.technical_details is not None
+    assert "Backend:" in intake.technical_details
+    assert "This step gets your upload ready" in intake.summary
 
 
 def test_empty_trace_html_shows_pending_steps():
@@ -89,6 +103,7 @@ def test_empty_trace_html_shows_pending_steps():
     assert "Pending" in html
     assert "Step 1 — Document intake" in html
     assert "Step 5 — Cross-marker pattern detection" in html
+    assert "Waiting for you to upload a lab report." in html
 
 
 def test_trace_to_chat_messages_shape():

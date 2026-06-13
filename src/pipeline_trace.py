@@ -21,6 +21,49 @@ _PIPELINE_STEP_DEFS: tuple[tuple[str, str], ...] = (
     ("pattern_detection", "Step 5 — Cross-marker pattern detection"),
 )
 
+_STEP_COPY: dict[str, dict[str, str]] = {
+    "document_intake": {
+        "explanation": (
+            "This step gets your upload ready for the AI. It checks the file type, turns PDF "
+            "pages into images when needed, and packages the report so the vision model can read it."
+        ),
+        "pending": "Waiting for you to upload a lab report.",
+        "running": "Reading your file and preparing it for the vision model.",
+    },
+    "vision_extraction": {
+        "explanation": (
+            "This step is where the AI actually reads your lab report. The vision model scans "
+            "tables, values, units, and labels, then turns what it sees into structured lab data."
+        ),
+        "pending": "The vision model has not run yet.",
+        "running": "The vision model is reading your report and extracting lab values.",
+    },
+    "schema_normalization": {
+        "explanation": (
+            "Raw model output can be messy. This step cleans it up into a consistent list of "
+            "markers, values, units, and patient details the rest of the app can trust."
+        ),
+        "pending": "Structured marker parsing has not started yet.",
+        "running": "Turning the model output into clean, structured lab values.",
+    },
+    "knowledge_graph": {
+        "explanation": (
+            "Numbers alone are hard to interpret. This step matches each marker to our knowledge "
+            "graph so the report can explain what a result generally means in plain language."
+        ),
+        "pending": "Knowledge graph enrichment has not started yet.",
+        "running": "Matching extracted markers to educational explanations.",
+    },
+    "pattern_detection": {
+        "explanation": (
+            "Single markers tell part of the story. This step looks across your results for "
+            "related flags and patterns that may deserve extra attention together."
+        ),
+        "pending": "Cross-marker pattern checks have not started yet.",
+        "running": "Checking how markers relate to each other across your report.",
+    },
+}
+
 
 @dataclass(frozen=True)
 class PipelineStep:
@@ -29,10 +72,26 @@ class PipelineStep:
     status: str
     summary: str
     return_code: int | None = 0
+    technical_details: str | None = None
     prompt: str | None = None
     input_preview: str | None = None
     output_preview: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
+
+
+def _step_copy(step_id: str, phase: str = "complete") -> str:
+    copy = _STEP_COPY[step_id]
+    if phase == "pending":
+        return copy["pending"]
+    if phase == "running":
+        return copy["running"]
+    return copy["explanation"]
+
+
+def _summary_with_result(explanation: str, result_note: str | None) -> str:
+    if not result_note:
+        return explanation
+    return f"{explanation}\n\nIn this run: {result_note}"
 
 
 def _truncate(text: str | None, limit: int = _MAX_PREVIEW) -> str | None:
@@ -90,13 +149,59 @@ def build_pipeline_trace(
             f"{preview.get('text_characters', 0)} text character(s)"
         )
 
+    intake_result_parts: list[str] = []
+    if file_name:
+        intake_result_parts.append(f"we prepared “{file_name}”")
+    modality = summary.get("input_modality")
+    if modality:
+        intake_result_parts.append(f"the input was treated as a {modality} document")
+    pages_rendered = summary.get("pages_rendered")
+    if pages_rendered is not None:
+        intake_result_parts.append(
+            f"{pages_rendered} page(s) were sent to the model as image(s)"
+        )
+    elif preview.get("image_count"):
+        intake_result_parts.append(
+            f"{preview.get('image_count')} image(s) were included in the model payload"
+        )
+    intake_result = ", and ".join(intake_result_parts) + "." if intake_result_parts else None
+
+    model_name = summary.get("model") or summary.get("repo") or backend
+    extraction_result_parts = [f"the {model_name} model extracted structured lab data from your report"]
+    if summary.get("duration_ms"):
+        seconds = max(1, int(summary["duration_ms"]) // 1000)
+        extraction_result_parts.append(f"in about {seconds} second(s)")
+    extraction_result = ", ".join(extraction_result_parts) + "."
+
+    normalization_result = (
+        f"we parsed {len(extraction.tests)} marker(s) and {len(extraction.notes)} note(s), "
+        f"with patient context recorded as {patient.get('sex', 'unknown')} / "
+        f"{patient.get('age_group', 'unknown')} when available"
+    ) + "."
+
+    enriched = report_summary.get("enriched_markers", 0)
+    total = report_summary.get("total_markers", 0)
+    unmatched = len(report_summary.get("unmatched_markers") or [])
+    knowledge_result = (
+        f"{enriched} of {total} marker(s) were matched to knowledge-base explanations"
+        + (f" and {unmatched} marker(s) had no close match" if unmatched else "")
+    ) + "."
+
+    flagged = len(interpretation.flagged)
+    patterns = len(interpretation.patterns)
+    pattern_result = (
+        f"we flagged {flagged} marker(s) for attention and found {patterns} cross-marker pattern(s), "
+        f"with {interpretation.normal_count} marker(s) recognized as in-range"
+    ) + "."
+
     steps: list[PipelineStep] = [
         PipelineStep(
             id="document_intake",
             title="Step 1 — Document intake",
             status="complete",
             return_code=0,
-            summary="\n".join(intake_lines),
+            summary=_summary_with_result(_step_copy("document_intake"), intake_result),
+            technical_details="\n".join(intake_lines),
             input_preview=file_name,
             metadata={
                 "backend": backend,
@@ -111,9 +216,12 @@ def build_pipeline_trace(
             title="Step 2 — Vision extraction (LLM)",
             status="complete",
             return_code=runtime_return_code,
-            summary=(
-                f"Model/backend: {summary.get('model') or summary.get('repo') or backend}. "
-                f"Extracted structured JSON from the document."
+            summary=_summary_with_result(_step_copy("vision_extraction"), extraction_result),
+            technical_details=(
+                f"Model/backend: {model_name}\n"
+                f"HTTP status: {summary.get('http_status', '—')}\n"
+                f"Duration (ms): {summary.get('duration_ms', '—')}\n"
+                f"Document parts: {summary.get('document_parts', '?')}"
             ),
             prompt=summary.get("extraction_prompt") or EXTRACTION_PROMPT,
             input_preview=_stringify_preview(
@@ -135,11 +243,12 @@ def build_pipeline_trace(
             title="Step 3 — Schema normalization",
             status="complete",
             return_code=0,
-            summary=(
-                f"Parsed {len(extraction.tests)} marker(s), "
-                f"{len(extraction.notes)} note(s). "
-                f"Patient sex: {patient.get('sex', 'unknown')}; "
-                f"age group: {patient.get('age_group', 'unknown')}."
+            summary=_summary_with_result(_step_copy("schema_normalization"), normalization_result),
+            technical_details=(
+                f"Markers parsed: {len(extraction.tests)}\n"
+                f"Notes parsed: {len(extraction.notes)}\n"
+                f"Patient sex: {patient.get('sex', 'unknown')}\n"
+                f"Patient age group: {patient.get('age_group', 'unknown')}"
             ),
             output_preview=_marker_preview(extraction.tests),
             metadata={
@@ -155,15 +264,16 @@ def build_pipeline_trace(
             title="Step 4 — Knowledge graph enrichment",
             status="complete",
             return_code=0,
-            summary=(
-                f"Enriched {report_summary.get('enriched_markers', 0)} of "
-                f"{report_summary.get('total_markers', 0)} marker(s). "
-                f"Unmatched: {len(report_summary.get('unmatched_markers') or [])}."
+            summary=_summary_with_result(_step_copy("knowledge_graph"), knowledge_result),
+            technical_details=(
+                f"Enriched markers: {enriched}\n"
+                f"Total markers: {total}\n"
+                f"Unmatched markers: {unmatched}"
             ),
             output_preview=_truncate(json.dumps(report_summary, indent=2)),
             metadata={
-                "enriched_markers": report_summary.get("enriched_markers", 0),
-                "total_markers": report_summary.get("total_markers", 0),
+                "enriched_markers": enriched,
+                "total_markers": total,
                 "unmatched_markers": report_summary.get("unmatched_markers") or [],
             },
         ),
@@ -172,11 +282,12 @@ def build_pipeline_trace(
             title="Step 5 — Cross-marker pattern detection",
             status="complete",
             return_code=0,
-            summary=_pattern_summary(interpretation),
+            summary=_summary_with_result(_step_copy("pattern_detection"), pattern_result),
+            technical_details=_pattern_summary(interpretation),
             output_preview=_pattern_output(interpretation),
             metadata={
-                "flagged_markers": len(interpretation.flagged),
-                "patterns_detected": len(interpretation.patterns),
+                "flagged_markers": flagged,
+                "patterns_detected": patterns,
                 "normal_count": interpretation.normal_count,
             },
         ),
@@ -217,7 +328,8 @@ def _pattern_output(interpretation: Interpretation) -> str | None:
 
 
 def _step_teaser(step: PipelineStep) -> str:
-    first_line = step.summary.strip().split("\n", 1)[0]
+    first_block = step.summary.strip().split("\n\n", 1)[0]
+    first_line = first_block.split("\n", 1)[0]
     if len(first_line) > 96:
         return first_line[:93].rstrip() + "..."
     return first_line
@@ -279,11 +391,38 @@ def _trace_block(body: str) -> str:
     """
 
 
+def _technical_details_block(step: PipelineStep) -> str | None:
+    sections: list[str] = []
+    metrics = _metrics_table(step)
+    if metrics:
+        sections.append(metrics)
+    if step.technical_details:
+        sections.append(
+            f'<pre class="bte-trace-technical-text">{html.escape(step.technical_details)}</pre>'
+        )
+    if not sections:
+        return None
+    return (
+        '<details class="bte-trace-subdetails">'
+        "<summary>Technical details</summary>"
+        f'<div class="bte-trace-technical">{"".join(sections)}</div>'
+        "</details>"
+    )
+
+
+def _render_summary_html(summary: str) -> str:
+    parts = summary.split("\n\n", 1)
+    chunks = [f'<p class="bte-trace-explanation">{html.escape(parts[0])}</p>']
+    if len(parts) > 1:
+        chunks.append(f'<p class="bte-trace-result">{html.escape(parts[1])}</p>')
+    return "".join(chunks)
+
+
 def step_to_html(step: PipelineStep) -> str:
-    sections: list[str] = [
-        _metrics_table(step),
-        f'<p class="bte-trace-summary">{html.escape(step.summary)}</p>',
-    ]
+    sections: list[str] = [_render_summary_html(step.summary)]
+    technical = _technical_details_block(step)
+    if technical:
+        sections.append(technical)
     if step.prompt:
         sections.append(
             '<details class="bte-trace-subdetails">'
@@ -327,17 +466,17 @@ def step_to_html(step: PipelineStep) -> str:
 def _placeholder_pipeline_steps(
     *,
     status: str,
-    summary: str,
     return_code: int | None = None,
     pipeline_phase: str,
 ) -> list[PipelineStep]:
+    phase = "pending" if status == "pending" else "running" if status == "running" else "complete"
     return [
         PipelineStep(
             id=step_id,
             title=title,
             status=status,
             return_code=return_code,
-            summary=summary,
+            summary=_step_copy(step_id, phase),
             metadata={"pipeline_phase": pipeline_phase},
         )
         for step_id, title in _PIPELINE_STEP_DEFS
@@ -352,7 +491,6 @@ def trace_to_html(steps: list[PipelineStep]) -> str:
 def empty_trace_html() -> str:
     steps = _placeholder_pipeline_steps(
         status="pending",
-        summary="Waiting for a lab report upload to start analysis.",
         return_code=None,
         pipeline_phase="ready",
     )
@@ -362,7 +500,6 @@ def empty_trace_html() -> str:
 def processing_trace_html() -> str:
     steps = _placeholder_pipeline_steps(
         status="running",
-        summary="Waiting for upstream steps to finish…",
         return_code=None,
         pipeline_phase="processing",
     )
@@ -375,7 +512,11 @@ def error_trace_html(message: str) -> str:
         title="Step 2 — Vision extraction (LLM)",
         status="failed",
         return_code=1,
-        summary=message,
+        summary=(
+            f"{_step_copy('vision_extraction')}\n\n"
+            f"In this run: the vision model could not finish reading your report. {message}"
+        ),
+        technical_details=message,
         metadata={"pipeline_phase": "failed"},
     )
     body = step_to_html(failed_step)
