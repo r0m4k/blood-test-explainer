@@ -1,17 +1,20 @@
-# Deploying the Space with ZeroGPU
+# Deploying the Space
 
-The active Hugging Face deployment is a **Gradio ZeroGPU Space** with **Transformers vision** as the default extraction backend.
+The active Hugging Face deployment is a **Gradio Space** with hardware-aware extraction:
+
+- **CPU Basic:** llama.cpp with the base MiniCPM-V GGUF model.
+- **ZeroGPU / GPU:** Transformers vision with the fine-tuned MiniCPM-V checkpoint.
 
 This workflow is intentionally fixed:
 
 1. The Space must stay a Gradio Space, not a Docker Space.
-2. Runtime extraction should use the Transformers backend on ZeroGPU by default.
-3. The extraction call must run behind `@spaces.GPU` so Hugging Face allocates ZeroGPU only while the model is needed.
+2. Runtime extraction should use `EXTRACTOR_BACKEND=auto` unless a lane is being forced for testing.
+3. ZeroGPU extraction calls must run behind `@spaces.GPU`; CPU Basic llama.cpp calls must not require ZeroGPU.
 4. Model files must not be committed to the Space git repo.
 5. When the fine-tuned model is ready, replace only the model variables for the active lanes.
-6. The llama.cpp lane is optional and must be enabled explicitly with environment variables.
+6. The llama.cpp lane is automatic on CPU Basic and can still be enabled explicitly with environment variables.
 
-Do not change this architecture unless the project intentionally gives up ZeroGPU. To swap models, change `ZEROGPU_MODEL_ID` (or `DEFAULT_HF_REPO` in `src/model_paths.py`) and optional `LLAMACPP_*` for the llama.cpp lane.
+Do not change this architecture unless the project intentionally gives up hardware-aware deployment. To swap models, change `ZEROGPU_MODEL_ID` (or `DEFAULT_HF_REPO` in `src/model_paths.py`) and optional `LLAMACPP_*` for the llama.cpp lane.
 
 ## 1. Space Metadata
 
@@ -33,12 +36,25 @@ pinned: false
 
 ZeroGPU is Gradio-only on Hugging Face. It is not available for Docker Spaces, which is why the previous Docker + `llama-server` deployment was replaced.
 
-## 2. Default Model Serving (Transformers)
+## 2. Default Model Serving
 
-The production Space path is the fine-tuned Transformers repo:
+Leave `EXTRACTOR_BACKEND` unset or set it to:
 
 ```text
-EXTRACTOR_BACKEND=transformers
+EXTRACTOR_BACKEND=auto
+```
+
+On **CPU Basic**, `auto` detects `cpu-basic` and selects llama.cpp vision with the base GGUF model:
+
+```text
+LLAMACPP_GGUF_REPO=openbmb/MiniCPM-V-4.6-gguf
+LLAMACPP_MODEL_FILE=MiniCPM-V-4_6-Q4_K_M.gguf
+LLAMACPP_MMPROJ_FILE=mmproj-model-f16.gguf
+```
+
+On **ZeroGPU/GPU**, `auto` selects the fine-tuned Transformers repo:
+
+```text
 ZEROGPU_MODEL_ID=build-small-hackathon/blood-test-minicpmv-4_6-medreason
 ```
 
@@ -61,11 +77,11 @@ transformers.AutoModelForImageTextToText
 
 This is the correct runtime for PDF/image blood-test uploads on ZeroGPU because the GPU is allocated only inside the decorated worker.
 
-Aliases `auto`, `zerogpu`, and `zero-gpu` resolve to the same Transformers path in `src/extraction/factory.py`.
+Aliases `zerogpu` and `zero-gpu` force the Transformers path in `src/extraction/factory.py`; `auto` is hardware-aware.
 
-## 3. Optional llama.cpp Lane
+## 3. llama.cpp Lane
 
-The app ships a second extraction lane for hackathon badges and GGUF deployment experiments. It is **not enabled by default**.
+The app ships a second extraction lane for CPU Basic, hackathon badges, and GGUF deployment experiments. It is automatic on CPU Basic.
 
 ### Why it exists
 
@@ -73,9 +89,9 @@ The app ships a second extraction lane for hackathon badges and GGUF deployment 
 - **Fine-tuned GGUF swap** — deploy a quantized model without changing the Gradio app structure.
 - **Text-only fallback** — lighter lane for plain-text lab exports when vision is not needed.
 
-For normal PDF/image uploads, keep `EXTRACTOR_BACKEND=transformers`.
+For normal CPU Basic PDF/image uploads, keep `EXTRACTOR_BACKEND=auto` and let the code select llama.cpp vision.
 
-### Enable vision llama.cpp on the Space
+### Force vision llama.cpp on the Space
 
 Set these variables in the Space settings:
 
@@ -127,9 +143,10 @@ The Docker path failed on free CPU hardware with `OOMKilled` during build. ZeroG
 This architecture keeps:
 
 - Free ZeroGPU eligibility.
+- A CPU Basic fallback that uses llama.cpp + base GGUF instead of Transformers.
 - No external hosted inference API calls.
 - The fine-tuned Transformers runtime on ZeroGPU for PDF/image lab reports.
-- An optional llama.cpp / GGUF lane for badges and fine-tuned GGUF deployment.
+- A llama.cpp / GGUF lane for CPU Basic, badges, and fine-tuned GGUF deployment.
 - A clean model swap by changing `ZEROGPU_MODEL_ID` / `DEFAULT_HF_REPO` and optional `LLAMACPP_*` variables.
 
 ## 6. Local Development

@@ -37,6 +37,7 @@ def test_compose_prompt_keeps_text_files():
 
 def test_extract_uses_vision_generation_when_enabled(monkeypatch):
     monkeypatch.setenv("LLAMACPP_VISION", "1")
+    monkeypatch.delenv("BTE_SPACE_HARDWARE", raising=False)
     image_parts = [{"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}]
 
     with patch(
@@ -55,10 +56,34 @@ def test_extract_uses_vision_generation_when_enabled(monkeypatch):
     assert result.request_summary["backend"] == "llamacpp-gpu-vision"
     assert result.request_summary["vision_enabled"] is True
     assert result.request_summary["mmproj"]
+    assert result.request_summary["spaces_gpu"] is True
+
+
+def test_cpu_basic_uses_plain_cpu_vision_runner(monkeypatch):
+    monkeypatch.setenv("BTE_SPACE_HARDWARE", "cpu-basic")
+    monkeypatch.setenv("LLAMACPP_VISION", "1")
+    image_parts = [{"type": "image_url", "image_url": {"url": "data:image/png;base64,abc"}}]
+
+    with patch(
+        "src.extraction.llamacpp_gpu.document_to_payload_parts",
+        return_value=image_parts,
+    ), patch(
+        "src.extraction.llamacpp_gpu._run_llamacpp_vision_generation_cpu",
+        return_value='{"patient":{},"tests":[],"notes":[]}',
+    ) as cpu_run, patch(
+        "src.extraction.llamacpp_gpu._run_llamacpp_vision_generation",
+    ) as gpu_run:
+        result = LlamaCppGPUExtractor().extract("/tmp/report.pdf")
+
+    cpu_run.assert_called_once()
+    gpu_run.assert_not_called()
+    assert result.request_summary["backend"] == "llamacpp-cpu-vision"
+    assert result.request_summary["spaces_gpu"] is False
 
 
 def test_extract_uses_text_generation_when_vision_disabled(monkeypatch):
     monkeypatch.delenv("LLAMACPP_VISION", raising=False)
+    monkeypatch.delenv("BTE_SPACE_HARDWARE", raising=False)
     text_parts = [{"type": "text", "text": "WBC 6.5"}]
 
     with patch(

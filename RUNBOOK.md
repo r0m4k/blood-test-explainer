@@ -1,6 +1,9 @@
 # Runbook — Extraction Backends + Fine-Tuned Model Swap
 
-The active deployment path is **Gradio with Transformers vision on ZeroGPU**.
+The active deployment path is **hardware-aware Gradio**:
+
+- **CPU Basic:** llama.cpp with the base MiniCPM-V GGUF model.
+- **ZeroGPU / GPU:** Transformers vision with the fine-tuned MiniCPM-V checkpoint.
 
 This replaced the Docker + `llama-server` path because ZeroGPU is only available for Gradio SDK Spaces. The Docker build was also failing on free CPU hardware with `OOMKilled`.
 
@@ -9,9 +12,9 @@ This replaced the Docker + `llama-server` path because ZeroGPU is only available
 | Area | Current choice |
 |---|---|
 | Space SDK | `gradio` |
-| Default extraction | Fine-tuned MiniCPM-V 4.6 (`build-small-hackathon/blood-test-minicpmv-4_6-medreason`) |
+| Default extraction | `auto`: CPU Basic uses base GGUF through llama.cpp; ZeroGPU/GPU uses fine-tuned Transformers |
 | ZeroGPU worker | `@spaces.GPU` in `src/extraction/zerogpu_transformers.py` |
-| Optional llama.cpp lane | `EXTRACTOR_BACKEND=llamacpp-gpu` (+ `LLAMACPP_VISION=1` for PDF/images) |
+| llama.cpp lane | Automatic on CPU Basic, or forced with `EXTRACTOR_BACKEND=llamacpp-gpu` (+ `LLAMACPP_VISION=1` for PDF/images) |
 | Transformers variables | `ZEROGPU_MODEL_ID`, `ZEROGPU_MAX_NEW_TOKENS`, `ZEROGPU_DOWNSAMPLE_MODE` |
 | llama.cpp variables | `LLAMACPP_GGUF_REPO`, `LLAMACPP_MODEL_FILE`, `LLAMACPP_MMPROJ_FILE`, `LLAMACPP_VISION` |
 | Extraction backends | `src/extraction/factory.py`, `src/extraction/zerogpu_transformers.py`, `src/extraction/llamacpp_gpu.py` |
@@ -25,8 +28,8 @@ Do not switch the Space back to Docker unless the project intentionally gives up
 
 | Value | Behavior |
 |---|---|
-| `transformers` (default) | Fine-tuned MiniCPM-V through Transformers vision |
-| `auto`, `zerogpu`, `zero-gpu` | Same as `transformers` |
+| unset / `auto` (default) | Hardware-aware: CPU Basic -> llama.cpp base GGUF; otherwise Transformers |
+| `transformers`, `zerogpu`, `zero-gpu` | Force fine-tuned MiniCPM-V through Transformers vision |
 | `llamacpp-gpu`, `llama-champion` | GGUF through `llama-cpp-python` |
 | `local`, `server` | Local `llama-server` HTTP backend |
 | `llamacpp` | In-process local GGUF + mmproj |
@@ -35,15 +38,23 @@ Do not switch the Space back to Docker unless the project intentionally gives up
 ### Default path (production)
 
 ```bash
-EXTRACTOR_BACKEND=transformers
-ZEROGPU_MODEL_ID=build-small-hackathon/blood-test-minicpmv-4_6-medreason
+# Usually leave EXTRACTOR_BACKEND unset, or set:
+EXTRACTOR_BACKEND=auto
 ```
 
-This is what the HF Space should use for PDF/image blood-test uploads. The env var is optional when it matches `DEFAULT_HF_REPO` in `src/model_paths.py`.
+On the current CPU Basic Space, `auto` selects llama.cpp vision with the base GGUF defaults:
+
+```bash
+LLAMACPP_GGUF_REPO=openbmb/MiniCPM-V-4.6-gguf
+LLAMACPP_MODEL_FILE=MiniCPM-V-4_6-Q4_K_M.gguf
+LLAMACPP_MMPROJ_FILE=mmproj-model-f16.gguf
+```
+
+When the Space is moved to ZeroGPU/GPU, `auto` selects Transformers and uses `ZEROGPU_MODEL_ID` or the default fine-tuned repo in `src/model_paths.py`.
 
 ### Optional llama.cpp path
 
-The llama.cpp lane is **opt-in**. It is not selected automatically.
+The llama.cpp lane is selected automatically on CPU Basic. It can also be forced explicitly.
 
 **Why keep it:**
 
@@ -99,7 +110,7 @@ transformers[torch]==5.7.0
 llama-cpp-python
 ```
 
-Transformers runs on ZeroGPU through `@spaces.GPU(duration=120)` (or longer for cold starts). The optional llama.cpp lane uses `@spaces.GPU(duration=600)` because GGUF inference can be slower.
+Transformers runs on ZeroGPU through `@spaces.GPU(duration=120)` (or longer for cold starts). llama.cpp bypasses `@spaces.GPU` on CPU Basic and runs as CPU inference; when forced on GPU/ZeroGPU it uses `@spaces.GPU(duration=600)`.
 
 On Linux x86_64 Spaces, `llama-cpp-python` comes from the prebuilt CPU manylinux wheel:
 
@@ -111,10 +122,15 @@ This avoids both the CUDA runtime mismatch that was causing the Space to abort o
 
 ## Current Model Defaults
 
-Primary lane:
+Auto lane:
 
 ```bash
-EXTRACTOR_BACKEND=transformers
+EXTRACTOR_BACKEND=auto
+```
+
+Transformers lane:
+
+```bash
 ZEROGPU_MODEL_ID=build-small-hackathon/blood-test-minicpmv-4_6-medreason
 ```
 
@@ -181,4 +197,4 @@ python3 -m py_compile app.py src/*.py src/extraction/*.py
 .venv/bin/python -m pytest tests/test_report_pipeline.py tests/test_llamacpp_gpu.py
 ```
 
-Then verify the Space build uses Gradio, not Docker, and that the default backend extracts PDF/image uploads through Transformers.
+Then verify the Space build uses Gradio, not Docker. On CPU Basic, the default backend should report `llamacpp-cpu-vision`; on ZeroGPU/GPU it should report the Transformers backend.

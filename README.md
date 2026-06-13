@@ -42,7 +42,7 @@ The breakthrough was to stop teaching the model our schema and teach it general 
 
 ## 🦙 Llama Champion
 
-The app ships two interchangeable backends behind one interface. The default runs the model through Transformers, and a second backend runs the same MiniCPM-V through the **llama.cpp** runtime, selectable with a single environment variable. We install the prebuilt llama.cpp wheel so the Space builds without a slow source compile, which means the model can run through the llama.cpp runtime when we point it there, while Transformers stays the default for the hosted demo.
+The app ships two interchangeable backends behind one interface. On CPU Basic Spaces, the default `auto` backend runs the base MiniCPM-V 4.6 GGUF through **llama.cpp** on CPU. On ZeroGPU/GPU, the same `auto` setting uses the fine-tuned Transformers model. We install the prebuilt llama.cpp wheel so the Space builds without a slow source compile, and the operator can still force the GGUF lane explicitly with `EXTRACTOR_BACKEND=llamacpp-gpu` and `LLAMACPP_VISION=1`.
 
 ## 🎨 Off-Brand
 

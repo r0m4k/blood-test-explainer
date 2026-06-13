@@ -39,6 +39,7 @@ from src.openbmb_client import (
     _parse_json_response,
     summarize_document_parts,
 )
+from src.space_runtime import is_cpu_basic_space
 
 DEFAULT_GGUF_REPO = "openbmb/MiniCPM-V-4.6-gguf"
 DEFAULT_MODEL_FILE = "MiniCPM-V-4_6-Q4_K_M.gguf"
@@ -69,6 +70,7 @@ class LlamaCppGPUExtractor:
         self.n_ctx = int(os.getenv("LLAMACPP_N_CTX", "8192"))
         self.n_gpu_layers = int(os.getenv("LLAMACPP_N_GPU_LAYERS", "0"))
         self.vision_enabled = llamacpp_vision_enabled()
+        self.use_spaces_gpu = not is_cpu_basic_space()
         if self.vision_enabled and not self.mmproj_file:
             raise ValueError("LLAMACPP_VISION=1 requires LLAMACPP_MMPROJ_FILE.")
 
@@ -76,7 +78,12 @@ class LlamaCppGPUExtractor:
         parts = document_to_payload_parts(file_path, max_pages=max_pages)
         started = time.perf_counter()
         if self.vision_enabled:
-            raw = _run_llamacpp_vision_generation(
+            runner = (
+                _run_llamacpp_vision_generation
+                if self.use_spaces_gpu
+                else _run_llamacpp_vision_generation_cpu
+            )
+            raw = runner(
                 parts=parts,
                 repo=self.repo,
                 model_file=self.model_file,
@@ -86,11 +93,16 @@ class LlamaCppGPUExtractor:
                 n_ctx=self.n_ctx,
                 n_gpu_layers=self.n_gpu_layers,
             )
-            backend = "llamacpp-gpu-vision"
+            backend = "llamacpp-gpu-vision" if self.use_spaces_gpu else "llamacpp-cpu-vision"
             composed_prompt = None
         else:
             prompt_text = _compose_prompt(parts)
-            raw = _run_llamacpp_generation(
+            runner = (
+                _run_llamacpp_generation
+                if self.use_spaces_gpu
+                else _run_llamacpp_generation_cpu
+            )
+            raw = runner(
                 prompt_text=prompt_text,
                 repo=self.repo,
                 model_file=self.model_file,
@@ -98,7 +110,7 @@ class LlamaCppGPUExtractor:
                 n_ctx=self.n_ctx,
                 n_gpu_layers=self.n_gpu_layers,
             )
-            backend = "llamacpp-gpu"
+            backend = "llamacpp-gpu" if self.use_spaces_gpu else "llamacpp-cpu"
             composed_prompt = prompt_text
 
         duration_ms = int((time.perf_counter() - started) * 1000)
@@ -108,6 +120,7 @@ class LlamaCppGPUExtractor:
             "repo": self.repo,
             "model": self.model_file,
             "vision_enabled": self.vision_enabled,
+            "spaces_gpu": self.use_spaces_gpu,
             "document_parts": len(parts),
             "max_pages": max_pages,
             "extraction_prompt": EXTRACTION_PROMPT,
@@ -178,6 +191,28 @@ def _run_llamacpp_vision_generation(
     n_ctx: int,
     n_gpu_layers: int,
 ) -> str:
+    return _run_llamacpp_vision_generation_cpu(
+        parts=parts,
+        repo=repo,
+        model_file=model_file,
+        mmproj_file=mmproj_file,
+        chat_handler=chat_handler,
+        max_tokens=max_tokens,
+        n_ctx=n_ctx,
+        n_gpu_layers=n_gpu_layers,
+    )
+
+
+def _run_llamacpp_vision_generation_cpu(
+    parts: list[dict[str, Any]],
+    repo: str,
+    model_file: str,
+    mmproj_file: str,
+    chat_handler: str,
+    max_tokens: int,
+    n_ctx: int,
+    n_gpu_layers: int,
+) -> str:
     try:
         model_path = download_hf_file(repo, model_file)
         mmproj_path = download_hf_file(repo, mmproj_file)
@@ -211,6 +246,24 @@ def _run_llamacpp_vision_generation(
 
 @spaces.GPU(duration=600)
 def _run_llamacpp_generation(
+    prompt_text: str,
+    repo: str,
+    model_file: str,
+    max_tokens: int,
+    n_ctx: int,
+    n_gpu_layers: int,
+) -> str:
+    return _run_llamacpp_generation_cpu(
+        prompt_text=prompt_text,
+        repo=repo,
+        model_file=model_file,
+        max_tokens=max_tokens,
+        n_ctx=n_ctx,
+        n_gpu_layers=n_gpu_layers,
+    )
+
+
+def _run_llamacpp_generation_cpu(
     prompt_text: str,
     repo: str,
     model_file: str,

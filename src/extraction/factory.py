@@ -1,8 +1,9 @@
 """Backend selection.
 
 `EXTRACTOR_BACKEND` env:
-  - `transformers` (default): local OpenBMB MiniCPM-V through Transformers.
-  - `auto`: same as `transformers`.
+  - unset / `auto` (default): hardware-aware Space selection.
+    CPU Basic Spaces use llama.cpp + base MiniCPM-V GGUF; other runtimes use Transformers.
+  - `transformers`: local/OpenBMB MiniCPM-V through Transformers.
   - `zerogpu` / `zero-gpu`: alias for `transformers`.
   - `llamacpp-gpu` / `llama-champion`: llama.cpp GGUF badge path. Add `LLAMACPP_VISION=1`
     for PDF/image vision via mmproj.
@@ -21,8 +22,9 @@ from src.extraction.auto import AutoExtractor
 from src.extraction.llamacpp_gpu import LlamaCppGPUExtractor
 from src.extraction.local_minicpmv import LocalMiniCPMVExtractor
 from src.extraction.local_server import LocalServerExtractor
+from src.space_runtime import configured_space_hardware, is_cpu_basic_space, is_huggingface_space
 
-_DEFAULT_BACKEND = "transformers"
+_DEFAULT_BACKEND = "auto"
 _DISABLED_BACKENDS = {"api", "openbmb", "hosted"}
 
 
@@ -35,7 +37,25 @@ def build_extractor(model: str | None = None) -> Extractor:
             "Use EXTRACTOR_BACKEND=transformers for local MiniCPM-V extraction."
         )
 
-    if backend in ("auto", "zerogpu", "zero-gpu", "transformers"):
+    if backend == "auto":
+        if is_cpu_basic_space():
+            hardware = configured_space_hardware()
+            if hardware:
+                os.environ.setdefault("BTE_SPACE_HARDWARE", hardware)
+            os.environ.setdefault("LLAMACPP_VISION", "1")
+            print(
+                "[Blood Test Explainer] CPU Basic Space detected; using llama.cpp "
+                "(base MiniCPM-V GGUF)",
+                flush=True,
+            )
+            return LlamaCppGPUExtractor()
+        if is_huggingface_space():
+            print(
+                "[Blood Test Explainer] non-CPU-Basic Space detected; using Transformers extractor",
+                flush=True,
+            )
+        return AutoExtractor(model_id=model)
+    if backend in ("zerogpu", "zero-gpu", "transformers"):
         return AutoExtractor(model_id=model)
     if backend in ("llamacpp-gpu", "gpu-llamacpp", "llama-champion"):
         from src.extraction.llamacpp_vision import llamacpp_vision_enabled
