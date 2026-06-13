@@ -5,7 +5,7 @@ from __future__ import annotations
 import os
 from typing import Any
 
-from src.document_processing import document_to_payload_parts
+from src.document_processing import document_intake_metadata, document_to_payload_parts
 from src.openbmb_client import (
     EXTRACTION_PROMPT,
     ExtractionResult,
@@ -13,13 +13,16 @@ from src.openbmb_client import (
     _normalize_patient,
     _normalize_tests,
     _parse_json_response,
+    summarize_document_parts,
 )
+
+from src.model_paths import TransformersModelSource, resolve_transformers_model_source
 
 DEFAULT_ZEROGPU_MODEL = "openbmb/MiniCPM-V-4.6"
 
 
 class ZeroGPUTransformersExtractor:
-    """Extractor backed by HF ZeroGPU and the OpenBMB Transformers implementation."""
+    """Extractor backed by local or Hub MiniCPM-V Transformers weights."""
 
     def __init__(
         self,
@@ -27,7 +30,8 @@ class ZeroGPUTransformersExtractor:
         max_new_tokens: int = 2048,
         downsample_mode: str = "16x",
     ) -> None:
-        self.model_id = (model_id or os.getenv("ZEROGPU_MODEL_ID") or DEFAULT_ZEROGPU_MODEL).strip()
+        self.model_source = resolve_transformers_model_source(model_id)
+        self.model_id = self.model_source.model_id
         self.max_new_tokens = int(os.getenv("ZEROGPU_MAX_NEW_TOKENS", str(max_new_tokens)))
         self.downsample_mode = (os.getenv("ZEROGPU_DOWNSAMPLE_MODE") or downsample_mode).strip()
 
@@ -37,14 +41,14 @@ class ZeroGPUTransformersExtractor:
             {
                 "role": "user",
                 "content": [
-                    *_to_transformers_content(parts),
                     {"type": "text", "text": EXTRACTION_PROMPT},
+                    *_to_transformers_content(parts),
                 ],
             }
         ]
         raw = _run_zerogpu_generation(
             messages=messages,
-            model_id=self.model_id,
+            model_source=self.model_source,
             max_new_tokens=self.max_new_tokens,
             downsample_mode=self.downsample_mode,
         )
@@ -55,11 +59,17 @@ class ZeroGPUTransformersExtractor:
             notes=_normalize_notes(parsed.get("notes", [])),
             raw_response=raw,
             request_summary={
-                "backend": "zerogpu-transformers",
+                "backend": "transformers",
                 "model": self.model_id,
+                "model_origin": self.model_source.origin,
+                "model_local_only": self.model_source.local_files_only,
                 "document_parts": len(parts),
                 "max_pages": max_pages,
                 "downsample_mode": self.downsample_mode,
+                "extraction_prompt": EXTRACTION_PROMPT,
+                "user_message_preview": summarize_document_parts(parts),
+                **document_intake_metadata(file_path, parts),
+                "messages_preview": _messages_preview(messages),
             },
         )
 
@@ -83,17 +93,58 @@ def _to_transformers_content(parts: list[dict[str, Any]]) -> list[dict[str, str]
     return content
 
 
-def _load_model(model_id: str):
+def _messages_preview(messages: list[dict[str, Any]]) -> str:
+    """Serialize message structure without embedding image data URLs."""
+    preview: list[dict[str, Any]] = []
+    for message in messages:
+        content = message.get("content")
+        if isinstance(content, str):
+            preview.append({"role": message.get("role"), "content": _truncate_preview(content)})
+            continue
+        if not isinstance(content, list):
+            continue
+        items: list[dict[str, str]] = []
+        for item in content:
+            if not isinstance(item, dict):
+                continue
+            if item.get("type") == "image":
+                items.append({"type": "image", "url": "[image omitted]"})
+            elif item.get("type") == "text":
+                items.append({"type": "text", "text": _truncate_preview(str(item.get("text") or ""))})
+            elif item.get("type") == "image_url":
+                items.append({"type": "image_url", "url": "[image omitted]"})
+        preview.append({"role": message.get("role"), "content": items})
+    import json
+
+    return json.dumps(preview, indent=2)
+
+
+def _truncate_preview(text: str, limit: int = 1200) -> str:
+    cleaned = text.strip()
+    if len(cleaned) <= limit:
+        return cleaned
+    return cleaned[: limit - 3] + "..."
+
+
+def _load_model(source: TransformersModelSource):
     import torch
     from transformers import AutoModelForImageTextToText, AutoProcessor
 
-    processor = AutoProcessor.from_pretrained(model_id)
+    from src.model_paths import hub_cache_dir
 
-    # 4-bit (NF4) quantization on GPU: earns the quantization badge and roughly quarters the
-    # GPU memory footprint (helps stay within ZeroGPU limits). Set ZEROGPU_QUANTIZE=0 to fall
-    # back to bf16 full precision if bitsandbytes ever misbehaves on the runtime.
+    pretrained_kwargs: dict[str, Any] = {
+        "trust_remote_code": True,
+        "local_files_only": source.local_files_only,
+    }
+    if not source.local_files_only:
+        pretrained_kwargs["cache_dir"] = str(hub_cache_dir())
+
+    processor = AutoProcessor.from_pretrained(source.model_id, **pretrained_kwargs)
+
     use_4bit = os.getenv("ZEROGPU_QUANTIZE", "1") != "0" and torch.cuda.is_available()
-    load_kwargs: dict[str, Any] = {"device_map": "auto"}
+    load_kwargs: dict[str, Any] = {"device_map": "auto", "trust_remote_code": True, "local_files_only": source.local_files_only}
+    if not source.local_files_only:
+        load_kwargs["cache_dir"] = str(hub_cache_dir())
     if use_4bit:
         from transformers import BitsAndBytesConfig
 
@@ -103,10 +154,14 @@ def _load_model(model_id: str):
             bnb_4bit_compute_dtype=torch.bfloat16,
             bnb_4bit_use_double_quant=True,
         )
+    elif torch.cuda.is_available():
+        load_kwargs["torch_dtype"] = torch.bfloat16
+    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        load_kwargs["torch_dtype"] = torch.float16
     else:
-        load_kwargs["torch_dtype"] = torch.bfloat16 if torch.cuda.is_available() else "auto"
+        load_kwargs["torch_dtype"] = torch.float32
 
-    model = AutoModelForImageTextToText.from_pretrained(model_id, **load_kwargs)
+    model = AutoModelForImageTextToText.from_pretrained(source.model_id, **load_kwargs)
     model.eval()
     return processor, model
 
@@ -114,10 +169,25 @@ def _load_model(model_id: str):
 _MODEL_CACHE: dict[str, tuple[Any, Any]] = {}
 
 
-def _get_model(model_id: str) -> tuple[Any, Any]:
-    if model_id not in _MODEL_CACHE:
-        _MODEL_CACHE[model_id] = _load_model(model_id)
-    return _MODEL_CACHE[model_id]
+def _cache_key(source: TransformersModelSource) -> str:
+    return f"{source.model_id}|local={int(source.local_files_only)}|origin={source.origin}"
+
+
+def _get_model(source: TransformersModelSource) -> tuple[Any, Any]:
+    from src.model_paths import hub_cache_dir
+
+    key = _cache_key(source)
+    if key not in _MODEL_CACHE:
+        if source.local_files_only:
+            print(f"[Blood Test Explainer] loading local Transformers model from {source.model_id}", flush=True)
+        else:
+            print(
+                f"[Blood Test Explainer] downloading Transformers model {source.model_id} "
+                f"(cache: {hub_cache_dir()}) and loading into memory",
+                flush=True,
+            )
+        _MODEL_CACHE[key] = _load_model(source)
+    return _MODEL_CACHE[key]
 
 
 try:
@@ -137,14 +207,14 @@ except ImportError:  # Local development without the HF Spaces package.
 @spaces.GPU(duration=120)
 def _run_zerogpu_generation(
     messages: list[dict[str, Any]],
-    model_id: str,
+    model_source: TransformersModelSource,
     max_new_tokens: int,
     downsample_mode: str,
 ) -> str:
     import torch
 
     try:
-        processor, model = _get_model(model_id)
+        processor, model = _get_model(model_source)
         inputs = processor.apply_chat_template(
             messages,
             tokenize=True,
@@ -174,6 +244,6 @@ def _run_zerogpu_generation(
         return str(output_text[0]).strip() if output_text else ""
     except Exception as exc:
         raise RuntimeError(
-            "OpenBMB Transformers generation failed on the CUDA/ZeroGPU lane. "
+            "MiniCPM-V Transformers generation failed. "
             f"Inner error: {type(exc).__name__}: {exc}"
         ) from exc

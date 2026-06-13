@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -10,7 +11,7 @@ import requests
 from json_repair import loads as repair_json_loads
 from requests import HTTPError
 
-from src.document_processing import document_to_payload_parts
+from src.document_processing import document_intake_metadata, document_to_payload_parts
 from src.local_env import load_local_env
 
 
@@ -106,6 +107,7 @@ class OpenBMBExtractor:
             "max_tokens": 2048,
         }
 
+        started = time.perf_counter()
         response = requests.post(
             self.api_url,
             headers={
@@ -115,6 +117,7 @@ class OpenBMBExtractor:
             json=payload,
             timeout=self.timeout_seconds,
         )
+        duration_ms = int((time.perf_counter() - started) * 1000)
         try:
             response.raise_for_status()
         except HTTPError as error:
@@ -133,12 +136,31 @@ class OpenBMBExtractor:
             notes=_normalize_notes(parsed.get("notes", [])),
             raw_response=raw_response,
             request_summary={
+                "backend": "api",
                 "api_url": self.api_url,
                 "model": self.model,
                 "document_parts": len(document_parts),
-                "pages": "auto",
+                "pages": max_pages or "auto",
+                "extraction_prompt": EXTRACTION_PROMPT,
+                "user_message_preview": summarize_document_parts(document_parts),
+                **document_intake_metadata(file_path, document_parts),
+                "http_status": response.status_code,
+                "return_code": 0,
+                "duration_ms": duration_ms,
             },
         )
+
+
+def summarize_document_parts(parts: list[dict[str, Any]]) -> dict[str, int]:
+    """Lightweight payload stats for pipeline traces (no base64 blobs)."""
+    image_count = 0
+    text_characters = 0
+    for part in parts:
+        if part.get("type") == "image_url":
+            image_count += 1
+        elif part.get("type") == "text":
+            text_characters += len(str(part.get("text") or ""))
+    return {"image_count": image_count, "text_characters": text_characters}
 
 
 def _extract_message_content(payload: dict[str, Any]) -> str:

@@ -19,10 +19,11 @@ Config (env):
 from __future__ import annotations
 
 import os
+import time
 from functools import lru_cache
 from typing import Any
 
-from src.document_processing import document_to_payload_parts
+from src.document_processing import document_intake_metadata, document_to_payload_parts
 from src.openbmb_client import (
     EXTRACTION_PROMPT,
     ExtractionResult,
@@ -30,6 +31,7 @@ from src.openbmb_client import (
     _normalize_patient,
     _normalize_tests,
     _parse_json_response,
+    summarize_document_parts,
 )
 
 DEFAULT_GGUF_REPO = "openbmb/MiniCPM-V-4.6-gguf"
@@ -62,6 +64,7 @@ class LlamaCppGPUExtractor:
     def extract(self, file_path: str, max_pages: int = 3) -> ExtractionResult:
         parts = document_to_payload_parts(file_path, max_pages=max_pages)
         prompt_text = _compose_prompt(parts)
+        started = time.perf_counter()
         raw = _run_llamacpp_generation(
             prompt_text=prompt_text,
             repo=self.repo,
@@ -70,6 +73,7 @@ class LlamaCppGPUExtractor:
             n_ctx=self.n_ctx,
             n_gpu_layers=self.n_gpu_layers,
         )
+        duration_ms = int((time.perf_counter() - started) * 1000)
         parsed = _parse_json_response(raw)
         return ExtractionResult(
             patient=_normalize_patient(parsed.get("patient", {})),
@@ -79,8 +83,15 @@ class LlamaCppGPUExtractor:
             request_summary={
                 "backend": "llamacpp-gpu",
                 "repo": self.repo,
+                "model": self.model_file,
                 "document_parts": len(parts),
                 "max_pages": max_pages,
+                "extraction_prompt": EXTRACTION_PROMPT,
+                "user_message_preview": summarize_document_parts(parts),
+                **document_intake_metadata(file_path, parts),
+                "composed_prompt": prompt_text,
+                "return_code": 0,
+                "duration_ms": duration_ms,
             },
         )
 
@@ -153,11 +164,60 @@ def _run_llamacpp_generation(
         ) from exc
 
 
+@spaces.GPU(duration=120)
+def _run_llamacpp_chat(
+    messages: list[dict[str, str]],
+    repo: str,
+    model_file: str,
+    max_tokens: int,
+    n_ctx: int,
+    n_gpu_layers: int,
+) -> str:
+    try:
+        model_path = _download(repo, model_file)
+    except Exception as exc:
+        raise RuntimeError(
+            "llama.cpp download failed while preparing the GGUF model: "
+            f"{type(exc).__name__}: {exc}"
+        ) from exc
+
+    try:
+        llm = _load(model_path, n_ctx, n_gpu_layers)
+    except Exception as exc:
+        raise RuntimeError(
+            "The llama.cpp backend could not load the text-only GGUF model for chat. "
+            f"Inner error: {type(exc).__name__}: {exc}"
+        ) from exc
+
+    try:
+        response = llm.create_chat_completion(
+            messages=messages,
+            temperature=0.2,
+            max_tokens=max_tokens,
+        )
+        return str(response["choices"][0]["message"].get("content") or "").strip()
+    except Exception as exc:
+        raise RuntimeError(
+            "llama.cpp chat generation failed. "
+            f"Inner error: {type(exc).__name__}: {exc}"
+        ) from exc
+
+
 def _compose_prompt(parts: list[dict[str, Any]]) -> str:
     text_parts: list[str] = [EXTRACTION_PROMPT]
+    image_count = 0
     for part in parts:
         if part.get("type") == "text":
             text = str(part.get("text", "")).strip()
             if text:
                 text_parts.append(text)
+        elif part.get("type") == "image_url":
+            image_count += 1
+
+    if image_count and len(text_parts) == 1:
+        raise RuntimeError(
+            "The CPU llama.cpp backend cannot analyze image-based documents. "
+            "Use EXTRACTOR_BACKEND=transformers for local vision extraction."
+        )
+
     return "\n\n".join(text_parts)

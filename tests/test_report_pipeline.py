@@ -90,6 +90,50 @@ def test_knowledge_graph_has_sex_guidance_for_every_marker():
     assert all("sex_specific_statistics_per_group_age" in test for test in high)
 
 
+# CBC markers in src/markers.py must match KG adult fallback intervals (fix #3).
+_KG_CBC_MARKER_MAP = {
+    "Hemoglobin": "hemoglobin",
+    "Hematocrit": "hct",
+    "Red Blood Cell Count": "rbc",
+    "White Blood Cell Count": "wbc",
+    "Platelet Count": "plt",
+    "MCV": "mcv",
+    "MCH": "mch",
+    "MCHC": "mchc",
+    "RDW": "rdw_cv",
+    "Absolute Lymphocyte Count": "lym_absolute",
+    "ESR": "esr",
+}
+
+
+def test_knowledge_graph_normal_values_are_midpoints():
+    graph = LabKnowledgeGraph.load()
+    for test in graph.tests:
+        for stats_key in ("statistics_per_group_age",):
+            stats = test.get(stats_key) or {}
+            for vals in stats.values():
+                lo, hi, mid = vals["minimal_value"], vals["maximum_value"], vals["normal_value"]
+                assert mid == round((lo + hi) / 2, 2)
+        sex_stats = test.get("sex_specific_statistics_per_group_age") or {}
+        for group_stats in sex_stats.values():
+            for vals in group_stats.values():
+                lo, hi, mid = vals["minimal_value"], vals["maximum_value"], vals["normal_value"]
+                assert mid == round((lo + hi) / 2, 2)
+
+
+def test_markers_py_cbc_ranges_match_knowledge_graph():
+    from src.markers import MARKERS
+
+    graph = LabKnowledgeGraph.load()
+    by_name = {m.name: m for m in MARKERS}
+    for marker_name, node_id in _KG_CBC_MARKER_MAP.items():
+        marker = by_name[marker_name]
+        node = graph.get(node_id)
+        adult = node["statistics_per_group_age"]["adult"]
+        assert marker.ref_low == adult["minimal_value"], marker_name
+        assert marker.ref_high == adult["maximum_value"], marker_name
+
+
 def test_final_report_bar_uses_kg_min_normal_and_max_values():
     report = build_health_report(
         _result(

@@ -15,6 +15,13 @@ import gradio as gr
 from src.extraction import build_extractor
 from src.interpretation_render import patterns_html
 from src.local_env import load_local_env
+from src.pipeline_trace import (
+    build_pipeline_trace,
+    empty_trace_html,
+    error_trace_html,
+    processing_trace_html,
+    trace_to_html,
+)
 from src.report_pipeline import build_health_report
 
 
@@ -26,21 +33,21 @@ def _boot_log(message: str) -> None:
     elapsed = time.perf_counter() - _BOOT_T0
     print(f"[Blood Test Explainer][{elapsed:0.2f}s] {message}", flush=True)
 
-# The hosted API key field is only relevant when the API backend is active. The current Space
-# path is ZeroGPU, so users should not see model/API configuration controls.
-_API_MODE = os.getenv("EXTRACTOR_BACKEND", "auto").strip().lower() == "api"
+_APP_ROOT = Path(__file__).resolve().parent
+_LOGO_DIR = _APP_ROOT / "assets" / "logos"
 _boot_log("environment loaded")
 
 
 def extract_lab_values(
     uploaded_file: str | None,
-) -> tuple[str, str, Any, str]:
+) -> tuple[str, str, Any, str, str]:
     if not uploaded_file:
         return (
             _status_html("Waiting for a document", "Upload a lab report to begin extraction."),
             empty_report_html("No document uploaded", "Choose a file first, then run extraction again."),
             gr.update(visible=True),
             workflow_phase_html("ready"),
+            empty_trace_html(),
         )
 
     extractor = build_extractor()
@@ -54,11 +61,13 @@ def extract_lab_values(
             empty_report_html("Extraction failed", detail),
             gr.update(visible=True),
             workflow_phase_html("ready"),
+            error_trace_html(detail),
         )
 
     health_report = build_health_report(result)
     summary = health_report["summary"]
     patient = health_report["patient"]
+    steps = build_pipeline_trace(result, health_report, source_path=uploaded_file)
 
     status_text = (
         f"Extracted {summary['total_markers']} lab values and enriched "
@@ -76,11 +85,10 @@ def extract_lab_values(
 
     return (
         _status_html("Extraction complete", status_text),
-        # Per-marker insight comes from the knowledge-graph report; append the cross-marker
-        # patterns (anemia picture, liver cluster, lipid risk) which the per-marker report omits.
         report_html(health_report) + patterns_html(result.tests),
         gr.update(visible=True),
         workflow_phase_html("done"),
+        trace_to_html(steps),
     )
 
 
@@ -101,11 +109,10 @@ def _format_extraction_error(error: Exception) -> str:
             "The llama.cpp backend could not load the GGUF model. That points to a model/runtime "
             "compatibility issue, not a background worker problem."
         )
+    if "hosted openbmb api backend is disabled" in lowered:
+        return "Hosted API extraction is disabled. The app uses local Transformers only."
     if "401" in lowered or "unauthorized" in lowered:
-        return (
-            "The OpenBMB endpoint rejected the request. Check the API key or switch to the local "
-            "ZeroGPU path."
-        )
+        return "Authentication failed for the configured backend."
     if "could not be converted into a report" in lowered:
         return "The model produced output, but it could not be parsed into the extraction schema."
     return primary
@@ -135,26 +142,152 @@ def _display_status_label(status: str) -> str:
     return normalized.title() if normalized else "Unknown"
 
 
-def hero_attribution_html() -> str:
-    items = [
-        ("Codex", "Build with Codex", "CDX", "aria-label=\"Codex logo\""),
-        ("OpenBMB", "Enabled with OpenBMB", "OB", "aria-label=\"OpenBMB logo\""),
-        ("Modal", "Finetuned with Modal", "M", "aria-label=\"Modal logo\""),
-        ("ACG", "Created by researchers at ACG", "ACG", "aria-label=\"ACG logo\""),
+def _logo_data_uri(filename: str) -> str | None:
+    path = _LOGO_DIR / filename
+    if not path.exists():
+        return None
+    mime_type = {
+        ".svg": "image/svg+xml",
+        ".png": "image/png",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".webp": "image/webp",
+    }.get(path.suffix.lower(), "application/octet-stream")
+    encoded = base64.b64encode(path.read_bytes()).decode("ascii")
+    return f"data:{mime_type};base64,{encoded}"
+
+
+def _hero_badge_mark_html(slug: str, mark: str, logo_file: str) -> str:
+    logo_uri = _logo_data_uri(logo_file)
+    if not logo_uri:
+        return escape(mark)
+    return (
+        f'<img class="bte-hero-badge-logo" src="{logo_uri}" '
+        f'alt="{escape(slug)} logo" loading="lazy" />'
+    )
+
+
+def hero_hackathon_panel_html() -> str:
+    hf_logo_uri = _logo_data_uri("HF.webp")
+    hf_logo_inner = (
+        f'<img class="bte-title-hf-logo" src="{hf_logo_uri}" alt="Hugging Face logo" loading="lazy" />'
+        if hf_logo_uri
+        else '<span class="bte-title-hf-logo-fallback" aria-hidden="true">HF</span>'
+    )
+    hf_logo_html = f'<span class="bte-title-hf-logo-wrap">{hf_logo_inner}</span>'
+    badges = [
+        (
+            "🔌",
+            "Off the Grid",
+            "Extraction runs on-device through llama.cpp or ZeroGPU with no external inference API.",
+        ),
+        (
+            "🎯",
+            "Well-Tuned",
+            "MiniCPM-V was fine-tuned on Modal and published on Hugging Face for lab report extraction.",
+        ),
+        (
+            "🎨",
+            "Off-Brand",
+            "Custom CSS, HTML reports, and workflow panels push past the default Gradio look.",
+        ),
+        (
+            "🦙",
+            "Llama Champion",
+            "GGUF models run through the llama.cpp runtime on CPU and ZeroGPU paths.",
+        ),
+        (
+            "📡",
+            "Sharing is Caring",
+            "Agent traces, eval artifacts, and model cards are shared on the Hugging Face Hub.",
+        ),
+        (
+            "📓",
+            "Field Notes",
+            "Build notes, runbooks, and deployment logs document what we built and learned.",
+        ),
     ]
-    badges = "\n".join(
+    badge_items = "\n".join(
         f"""
-        <li class=\"bte-hero-badge bte-hero-badge--{escape(slug.lower())}\">
-          <span class=\"bte-hero-badge-mark\" {attrs}>{escape(mark)}</span>
-          <span class=\"bte-hero-badge-text\">{escape(label)}</span>
+        <li class="bte-hack-badge" tabindex="0">
+          <div class="bte-hack-badge-row">
+            <span class="bte-hack-badge-icon" aria-hidden="true">{emoji}</span>
+            <span class="bte-hack-badge-name">{escape(name)}</span>
+          </div>
+          <p class="bte-expand-detail">{escape(detail)}</p>
         </li>
         """
-        for slug, label, mark, attrs in items
+        for emoji, name, detail in badges
     )
     return f"""
-    <ul class=\"bte-hero-attribution\" aria-label=\"Project attributions\">
-      {badges}
-    </ul>
+    <div class="bte-title-hackathon-panel">
+      <section class="bte-title-hf" aria-label="Hackathon project">
+        {hf_logo_html}
+        <p class="bte-title-hf-copy">Project for Build Small Hackathon</p>
+      </section>
+      <div class="bte-title-section-divider" aria-hidden="true"></div>
+      <section class="bte-hack-badges">
+        <p class="bte-title-side-label">Badges Collected</p>
+        <ul class="bte-hack-badges-grid" aria-label="Hackathon badges collected">
+          {badge_items}
+        </ul>
+      </section>
+    </div>
+    """
+
+
+def hero_attribution_html() -> str:
+    items = [
+        (
+            "Codex",
+            "Build with Codex",
+            "CDX",
+            "codex.png",
+            "Codex helped build the app UI, extraction pipeline, deployment scripts, and iteration workflow.",
+        ),
+        (
+            "OpenBMB",
+            "Enabled with OpenBMB",
+            "OB",
+            "openbmb.png",
+            "MiniCPM-V-4.6 reads uploaded lab reports and extracts marker values, units, and status flags.",
+        ),
+        (
+            "Modal",
+            "Finetuned with Modal",
+            "M",
+            "modal.png",
+            "Modal runs LoRA fine-tuning and evaluation jobs that produced the published extraction model.",
+        ),
+        (
+            "ACG",
+            "Created by researchers at ACG",
+            "ACG",
+            "acg.png",
+            "Developed at The American College of Greece for the Hugging Face Build Small Hackathon.",
+        ),
+    ]
+    badge_chunks = []
+    for slug, label, mark, logo_file, detail in items:
+        mark_html = _hero_badge_mark_html(slug, mark, logo_file)
+        badge_chunks.append(
+            f"""
+        <li class="bte-hero-badge bte-hero-badge--{escape(slug.lower())}" tabindex="0">
+          <div class="bte-hero-badge-row">
+            <span class="bte-hero-badge-mark">{mark_html}</span>
+            <span class="bte-hero-badge-text">{escape(label)}</span>
+          </div>
+          <p class="bte-expand-detail">{escape(detail)}</p>
+        </li>
+        """
+        )
+    badges = "\n".join(badge_chunks)
+    return f"""
+    <div class="bte-hero-credits">
+      <ul class="bte-hero-attribution" aria-label="Project attributions">
+        {badges}
+      </ul>
+    </div>
     """
 
 
@@ -195,22 +328,24 @@ def workflow_arrow_html(kind: str) -> str:
     """
 
 
-def show_processing() -> tuple[str, Any, str, str]:
+def show_processing() -> tuple[str, Any, str, str, str]:
     return (
         _status_html("Reading document", "Extracting patient context and markers, then matching them to the knowledge graph.", tone="loading"),
         gr.update(visible=False),
         "",
         workflow_phase_html("processing"),
+        processing_trace_html(),
     )
 
 
-def upload_state(uploaded_file: str | None) -> tuple[Any, Any]:
+def upload_state(uploaded_file: str | None) -> tuple[Any, Any, Any, str, str]:
     if not uploaded_file:
         return (
             gr.update(visible=True),
-            gr.update(value='<p class="bte-upload-hint">Supported formats: PDF</p>', visible=True),
+            gr.update(value='<p class="bte-upload-hint">Supported formats: PDF, PNG, JPEG, WebP</p>', visible=True),
             gr.update(visible=False, value=selected_document_html()),
             workflow_phase_html("ready"),
+            empty_trace_html(),
         )
 
     preview_data_url = _uploaded_file_preview_data_url(uploaded_file)
@@ -219,6 +354,7 @@ def upload_state(uploaded_file: str | None) -> tuple[Any, Any]:
         gr.update(value="", visible=False),
         gr.update(visible=True, value=selected_document_html(preview_data_url=preview_data_url)),
         workflow_phase_html("processing"),
+        processing_trace_html(),
     )
 
 
@@ -266,7 +402,7 @@ def _uploaded_file_preview_data_url(uploaded_file: str) -> str | None:
             if document.page_count == 0:
                 return None
             page = document.load_page(0)
-            pixmap = page.get_pixmap(matrix=fitz.Matrix(2, 2), alpha=False)
+            pixmap = page.get_pixmap(matrix=fitz.Matrix(2.8, 2.8), alpha=False)
             encoded = base64.b64encode(pixmap.tobytes("png")).decode("ascii")
             return f"data:image/png;base64,{encoded}"
 
@@ -328,38 +464,6 @@ def analysis_animation_html() -> str:
             <span></span><span></span><span></span>
           </div>
           <div class="bte-scan-band"></div>
-        </div>
-      </div>
-    </section>
-    """
-
-
-def result_preview_html() -> str:
-    return """
-    <section class="bte-formation bte-formation--result" aria-label="Clear lab results preview">
-      <div class="bte-formation-stage bte-formation-stage--result">
-        <div class="bte-smart-report">
-          <div class="bte-report-window">
-            <div class="bte-report-header">
-              <strong>12 markers</strong>
-              <small>ready to review</small>
-            </div>
-            <div class="bte-mini-card bte-mini-card--green">
-              <span>Hemoglobin</span>
-              <strong>Normal</strong>
-            </div>
-            <div class="bte-mini-card bte-mini-card--red">
-              <span>Vitamin D</span>
-              <strong>Low</strong>
-            </div>
-            <div class="bte-mini-chart">
-              <span style="height: 34%"></span>
-              <span style="height: 56%"></span>
-              <span style="height: 42%"></span>
-              <span style="height: 74%"></span>
-              <span style="height: 61%"></span>
-            </div>
-          </div>
         </div>
       </div>
     </section>
@@ -899,6 +1003,7 @@ CUSTOM_CSS = """
   --bte-radius: 22px;
   --bte-shadow: 0 14px 34px rgba(17, 24, 39, 0.055);
   --bte-shadow-strong: 0 18px 44px rgba(17, 24, 39, 0.07);
+  --bte-active-ring: linear-gradient(120deg, var(--bte-green), var(--bte-blue), var(--bte-red));
   --bte-rail: min(94vw, 1240px);
 }
 
@@ -1038,15 +1143,15 @@ gradio-app,
   width: var(--bte-rail) !important;
   max-width: var(--bte-rail) !important;
   margin: 0 auto 18px !important;
-  padding: 30px 28px 28px;
+  padding: 28px 28px 26px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(280px, 360px);
-  gap: 32px;
-  align-items: center;
+  grid-template-columns: minmax(0, 1.05fr) minmax(250px, 0.95fr) minmax(250px, 0.9fr);
+  gap: 24px 28px;
+  align-items: stretch;
   border: 1px solid rgba(255, 255, 255, 0.42);
   border-radius: var(--bte-radius);
   background:
-    linear-gradient(120deg, rgba(18, 128, 92, 0.98) 0%, rgba(37, 99, 235, 0.95) 58%, rgba(191, 52, 52, 0.82) 100%),
+    linear-gradient(120deg, rgba(191, 52, 52, 0.82) 0%, rgba(37, 99, 235, 0.95) 58%, rgba(18, 128, 92, 0.98) 100%),
     #12805c;
   box-shadow: var(--bte-shadow-strong);
 }
@@ -1064,17 +1169,268 @@ gradio-app,
   color: rgba(255, 255, 255, 0.88);
   -webkit-text-fill-color: rgba(255, 255, 255, 0.88) !important;
   font-size: 16px;
-  max-width: 820px;
+  max-width: none;
   margin: 0;
+  text-align: left;
+}
+
+.bte-title-copy,
+.bte-title-hackathon-wrap,
+.bte-title-credits-wrap,
+.bte-title .bte-title-copy,
+.bte-title .bte-title-hackathon-wrap,
+.bte-title .bte-title-credits-wrap {
+  position: relative;
+  align-self: stretch;
+  min-width: 0;
 }
 
 .bte-title-copy {
+  text-align: left;
+  justify-self: stretch;
+  padding-right: 24px;
+}
+
+.bte-title-hackathon-wrap {
+  padding-right: 24px;
+}
+
+.bte-title-credits-wrap {
+  padding-left: 4px;
+}
+
+.bte-title-copy::after,
+.bte-title-hackathon-wrap::after,
+.bte-title .bte-title-copy::after,
+.bte-title .bte-title-hackathon-wrap::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgba(255, 255, 255, 0.42);
+  pointer-events: none;
+}
+
+.bte-title-hackathon-panel {
+  display: grid;
+  gap: 0;
+  align-content: start;
+}
+
+.bte-title-hf {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 14px;
+  padding-bottom: 18px;
+  text-align: left;
+}
+
+.bte-title-hf-logo-wrap {
+  flex: 0 0 52px;
+  width: 52px;
+  height: 52px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border-radius: 23%;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 4px 14px rgba(17, 24, 39, 0.14);
+}
+
+.bte-title-hf-logo {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.bte-title-hf-logo-fallback {
+  display: grid;
+  place-items: center;
+  width: 100%;
+  height: 100%;
+  color: #111827;
+  font-size: 18px;
+  font-weight: 800;
+}
+
+.bte-title-hf-copy {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  line-height: 1.35;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.88) !important;
+  -webkit-text-fill-color: rgba(255, 255, 255, 0.88) !important;
+}
+
+.bte-title-section-divider {
+  height: 1px;
+  background: rgba(255, 255, 255, 0.34);
+  margin-bottom: 18px;
+}
+
+.bte-title-side-label {
+  margin: 0 0 10px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.72) !important;
+  -webkit-text-fill-color: rgba(255, 255, 255, 0.72) !important;
+}
+
+.bte-hack-badges,
+.bte-hack-badges-grid,
+.bte-hero-credits,
+.bte-hero-attribution {
+  overflow: visible;
+}
+
+.bte-hack-badges-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-rows: minmax(36px, auto);
+  align-content: start;
+  gap: 8px 10px;
+}
+
+.bte-hack-badge {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  width: 100%;
+  max-width: 100%;
+  min-height: 36px;
+  max-height: 36px;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 8px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  overflow: hidden;
+  cursor: pointer;
+  position: relative;
+  transition:
+    max-height 260ms ease,
+    background 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.bte-hack-badge:hover,
+.bte-hack-badge:focus-within {
+  max-height: 500px;
+  overflow: visible;
+  z-index: 3;
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.32);
+  box-shadow: 0 10px 24px rgba(17, 24, 39, 0.16);
+  outline: none;
+}
+
+.bte-hack-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  min-height: 18px;
+}
+
+.bte-hack-badge-icon {
+  flex: 0 0 18px;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.bte-hack-badge-name {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  font-size: 10px;
+  line-height: 1.2;
+  font-weight: 700;
+}
+
+.bte-expand-detail {
+  margin: 0;
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.76) !important;
+  -webkit-text-fill-color: rgba(255, 255, 255, 0.76) !important;
+  font-size: 10px !important;
+  line-height: 1.4;
+  font-weight: 400 !important;
+  white-space: normal;
+  transition:
+    max-height 260ms ease,
+    opacity 180ms ease,
+    margin-top 180ms ease;
+}
+
+.bte-title .bte-expand-detail,
+.bte-title .bte-expand-detail * {
+  font-size: 10px !important;
+  font-weight: 400 !important;
+  line-height: 1.4 !important;
+}
+
+.bte-hack-badge:hover .bte-hack-badge-name,
+.bte-hack-badge:focus-within .bte-hack-badge-name,
+.bte-hero-badge:hover .bte-hero-badge-text,
+.bte-hero-badge:focus-within .bte-hero-badge-text {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+}
+
+.bte-hack-badge:hover .bte-expand-detail,
+.bte-hack-badge:focus-within .bte-expand-detail {
+  padding-left: 25px;
+}
+
+.bte-hero-badge:hover .bte-expand-detail,
+.bte-hero-badge:focus-within .bte-expand-detail {
+  padding-left: 58px;
+}
+
+.bte-hack-badge:hover .bte-expand-detail,
+.bte-hack-badge:focus-within .bte-expand-detail,
+.bte-hero-badge:hover .bte-expand-detail,
+.bte-hero-badge:focus-within .bte-expand-detail {
+  max-height: 400px;
+  opacity: 1;
+  margin-top: 6px;
+  overflow: visible;
+}
+
+.bte-hero-credits {
   min-width: 0;
 }
 
 .bte-title-attribution-wrap {
   min-width: 0;
-  justify-self: end;
 }
 
 .bte-hero-attribution {
@@ -1086,53 +1442,93 @@ gradio-app,
 }
 
 .bte-hero-badge {
-  display: grid;
-  grid-template-columns: 34px minmax(0, 1fr);
-  gap: 12px;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0;
+  min-height: 54px;
+  max-height: 54px;
   padding: 10px 12px;
   border-radius: 14px;
   background: rgba(255, 255, 255, 0.12);
   border: 1px solid rgba(255, 255, 255, 0.18);
   backdrop-filter: blur(6px);
+  overflow: hidden;
+  cursor: pointer;
+  position: relative;
+  transition:
+    max-height 260ms ease,
+    background 180ms ease,
+    border-color 180ms ease,
+    box-shadow 180ms ease;
+}
+
+.bte-hero-badge:hover,
+.bte-hero-badge:focus-within {
+  max-height: 500px;
+  overflow: visible;
+  z-index: 3;
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.32);
+  box-shadow: 0 10px 24px rgba(17, 24, 39, 0.16);
+  outline: none;
+}
+
+.bte-hero-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  min-height: 34px;
 }
 
 .bte-hero-badge-mark {
-  width: 34px;
+  width: 46px;
   height: 34px;
-  border-radius: 11px;
+  flex: 0 0 46px;
   display: grid;
   place-items: center;
-  color: #fff;
+  color: #ffffff;
   font-size: 11px;
   font-weight: 800;
   letter-spacing: 0;
-  background: linear-gradient(135deg, rgba(255, 255, 255, 0.26), rgba(255, 255, 255, 0.08));
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.16);
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
+
+.bte-hero-badge-logo {
+  display: block;
+  width: 34px;
+  max-width: 38px;
+  max-height: 24px;
+  object-fit: contain;
 }
 
 .bte-hero-badge-text {
+  flex: 1 1 auto;
+  min-width: 0;
   color: #ffffff !important;
   -webkit-text-fill-color: #ffffff !important;
   font-size: 13px;
-  line-height: 1.2;
+  line-height: 1.3;
   font-weight: 700;
 }
 
-.bte-hero-badge--codex .bte-hero-badge-mark {
-  background: linear-gradient(135deg, rgba(37, 99, 235, 0.95), rgba(18, 128, 92, 0.92));
+.bte-hero-badge--openbmb .bte-hero-badge-logo {
+  width: auto;
+  max-width: 44px;
+  max-height: 22px;
 }
 
-.bte-hero-badge--openbmb .bte-hero-badge-mark {
-  background: linear-gradient(135deg, rgba(18, 128, 92, 0.95), rgba(37, 99, 235, 0.92));
+.bte-hero-badge--modal .bte-hero-badge-logo {
+  width: 38px;
+  max-width: 40px;
 }
 
-.bte-hero-badge--modal .bte-hero-badge-mark {
-  background: linear-gradient(135deg, rgba(191, 52, 52, 0.95), rgba(37, 99, 235, 0.9));
-}
-
-.bte-hero-badge--acg .bte-hero-badge-mark {
-  background: linear-gradient(135deg, rgba(90, 99, 214, 0.95), rgba(18, 128, 92, 0.9));
+.bte-hero-badge--acg .bte-hero-badge-logo {
+  width: 32px;
+  max-height: 32px;
 }
 
 .bte-title .bte-kicker,
@@ -1153,6 +1549,11 @@ gradio-app,
 .bte-title h1 {
   font-size: clamp(38px, 5vw, 56px) !important;
   line-height: 1.04 !important;
+  text-align: left !important;
+}
+
+.bte-title .bte-kicker {
+  text-align: left !important;
 }
 
 .bte-title > div,
@@ -1203,17 +1604,8 @@ gradio-app,
   padding: 0 !important;
 }
 
-.bte-hero-grid .bte-upload-card {
-  border: 1px solid var(--bte-line) !important;
-  border-radius: var(--bte-radius) !important;
-  padding: 18px !important;
-  background: var(--bte-page) !important;
-  box-shadow: var(--bte-shadow) !important;
-  overflow: hidden !important;
-}
-
-.bte-hero-grid .block:has(.bte-upload-card),
-.bte-hero-grid div:has(> .bte-upload-card) {
+.bte-hero-grid .bte-panel-upload .block:has(.bte-upload-card),
+.bte-hero-grid .bte-panel-upload div:has(> .bte-upload-card) {
   height: 430px !important;
   min-height: 430px !important;
   border: 1px solid var(--bte-line) !important;
@@ -1222,15 +1614,33 @@ gradio-app,
   background: var(--bte-page) !important;
   box-shadow: var(--bte-shadow) !important;
   overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
 }
 
-.bte-hero-grid .block:has(.bte-upload-card) .bte-upload-card,
-.bte-hero-grid div:has(> .bte-upload-card) > .bte-upload-card {
+.bte-hero-grid .bte-panel-upload .block:has(.bte-upload-card) .bte-shell,
+.bte-hero-grid .bte-panel-upload div:has(> .bte-upload-card) .bte-shell,
+.bte-hero-grid .bte-panel-upload .block:has(.bte-upload-card) .bte-upload-card,
+.bte-hero-grid .bte-panel-upload div:has(> .bte-upload-card) > .bte-upload-card {
   height: 100% !important;
   min-height: 0 !important;
+  flex: 1 1 auto !important;
+  display: flex !important;
+  flex-direction: column !important;
   border: 0 !important;
   padding: 0 !important;
   box-shadow: none !important;
+  background: transparent !important;
+  overflow: hidden !important;
+}
+
+.bte-hero-grid .bte-upload-card:not(.bte-panel-upload .block:has(.bte-upload-card) .bte-upload-card) {
+  border: 1px solid var(--bte-line) !important;
+  border-radius: var(--bte-radius) !important;
+  padding: 18px !important;
+  background: var(--bte-page) !important;
+  box-shadow: var(--bte-shadow) !important;
+  overflow: hidden !important;
 }
 
 .bte-workflow-panel {
@@ -1382,11 +1792,13 @@ gradio-app,
 .bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="processing"]) ~ .bte-step-row-block .bte-step-heading--analysis,
 .bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="done"]) ~ .bte-step-row-block .bte-step-heading--report {
   opacity: 1;
-  filter: saturate(1);
+  filter: saturate(1.08);
   transform: translateY(-1px);
-  border-color: rgba(37, 99, 235, 0.32);
-  background: linear-gradient(180deg, rgba(37, 99, 235, 0.08), rgba(255, 255, 255, 0.98));
-  box-shadow: 0 16px 34px rgba(37, 99, 235, 0.1);
+  border: 2px solid transparent;
+  background:
+    linear-gradient(var(--bte-surface), var(--bte-surface)) padding-box,
+    var(--bte-active-ring) border-box;
+  box-shadow: var(--bte-shadow-strong);
 }
 
 .bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="ready"]) ~ .bte-step-row-block .bte-step-heading--analysis,
@@ -1434,7 +1846,7 @@ gradio-app,
 
 .bte-panel-upload .bte-upload-card,
 .bte-panel-analysis .bte-formation,
-.bte-panel-result .bte-formation,
+.bte-panel-result .bte-agent-panel,
 .bte-final-row .bte-report {
   transition: opacity 220ms ease, filter 220ms ease, box-shadow 220ms ease, transform 220ms ease, border-color 220ms ease, background 220ms ease;
 }
@@ -1446,12 +1858,115 @@ gradio-app,
 }
 
 .bte-upload-card {
-  height: 430px !important;
+  height: 100% !important;
   display: flex;
   flex-direction: column;
-  justify-content: space-between;
-  min-height: 430px;
-  overflow: visible !important;
+  justify-content: flex-start;
+  min-height: 0 !important;
+  overflow: hidden !important;
+  position: relative !important;
+}
+
+.bte-panel-upload .bte-upload-dropzone,
+.bte-panel-upload .bte-upload-card > .block:has(.bte-upload-dropzone),
+.bte-panel-upload .bte-upload-card > .form:has(.bte-upload-dropzone) {
+  position: absolute !important;
+  inset: 0 !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+  border: 0 !important;
+  padding: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  z-index: 1 !important;
+}
+
+.bte-upload-card:has(.bte-selected-document) .bte-upload-dropzone,
+.bte-upload-card:has(.bte-selected-document) .bte-upload-hint-wrap,
+.bte-upload-card:has(.bte-selected-document) > .block:has(.bte-upload-dropzone),
+.bte-upload-card:has(.bte-selected-document) > .form:has(.bte-upload-dropzone) {
+  display: none !important;
+}
+
+.bte-upload-card:has(.bte-selected-document) .block:has(.bte-selected-document),
+.bte-upload-card:has(.bte-selected-document) .html-container:has(.bte-selected-document) {
+  position: absolute !important;
+  inset: 0 !important;
+  z-index: 5 !important;
+  width: 100% !important;
+  height: 100% !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: hidden !important;
+}
+
+.bte-upload-card:has(.bte-selected-document) .prose.bte-selected-document-wrap,
+.bte-upload-card:has(.bte-selected-document) .html-container:has(.bte-selected-document) > *,
+.bte-upload-card:has(.bte-selected-document) .bte-selected-document,
+.bte-upload-card:has(.bte-selected-document) .bte-selected-preview {
+  height: 100% !important;
+  min-height: 100% !important;
+}
+
+.bte-upload-card:has(.bte-selected-document) .prose:has(.bte-selected-document) {
+  padding: 0 !important;
+  margin: 0 !important;
+  max-width: none !important;
+}
+
+.bte-panel-upload .bte-upload-dropzone > .block,
+.bte-panel-upload .bte-upload-dropzone > .form,
+.bte-panel-upload .bte-upload-dropzone > div {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+.bte-panel-upload .bte-upload-hint-wrap {
+  flex: 0 0 auto;
+  position: relative !important;
+  z-index: 2 !important;
+  pointer-events: none !important;
+}
+
+.bte-upload-hint {
+  margin: 0 0 12px !important;
+  color: var(--bte-ink) !important;
+  font-size: 18px !important;
+  font-weight: 700 !important;
+  text-align: center !important;
+}
+
+.bte-panel-upload .bte-upload-card .block:has(.bte-uploader),
+.bte-panel-upload .bte-upload-card .form:has(.bte-uploader),
+.bte-panel-upload .bte-shell > .block:has(.bte-uploader),
+.bte-panel-upload .bte-shell > .form:has(.bte-uploader),
+.bte-panel-upload .bte-upload-card > .block:has(.bte-uploader) {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
+}
+
+.bte-panel-upload .bte-uploader,
+.bte-panel-upload .bte-uploader > div,
+.bte-panel-upload .bte-uploader > div > div,
+.bte-panel-upload .bte-uploader .wrap {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  overflow: hidden !important;
 }
 
 .bte-formation {
@@ -1484,11 +1999,327 @@ gradio-app,
 }
 
 .bte-panel-analysis .bte-formation--analysis,
-.bte-panel-result .bte-formation--result {
-  overflow: visible;
+.bte-panel-result .bte-agent-panel {
+  overflow: hidden;
 }
 
-.bte-panel-result .bte-smart-report,
+.bte-hero-grid .bte-panel-trace .block:has(.bte-agent-panel),
+.bte-hero-grid .bte-panel-trace div:has(> .bte-agent-panel) {
+  height: 430px !important;
+  min-height: 430px !important;
+  max-height: 430px !important;
+  border: 1px solid var(--bte-line) !important;
+  border-radius: var(--bte-radius) !important;
+  padding: 16px !important;
+  background: var(--bte-page) !important;
+  box-shadow: var(--bte-shadow) !important;
+  overflow: hidden !important;
+  display: flex !important;
+  flex-direction: column !important;
+  box-sizing: border-box !important;
+}
+
+.bte-hero-grid .bte-panel-trace .block:has(.bte-agent-panel) .bte-shell,
+.bte-hero-grid .bte-panel-trace div:has(> .bte-agent-panel) .bte-shell,
+.bte-hero-grid .bte-panel-trace .block:has(.bte-agent-panel) .bte-agent-panel,
+.bte-hero-grid .bte-panel-trace div:has(> .bte-agent-panel) > .bte-agent-panel {
+  height: 100% !important;
+  min-height: 0 !important;
+  flex: 1 1 auto !important;
+  display: flex !important;
+  flex-direction: column !important;
+  border: 0 !important;
+  padding: 0 !important;
+  box-shadow: none !important;
+  background: transparent !important;
+  overflow: hidden !important;
+  gap: 0 !important;
+}
+
+.bte-agent-panel,
+.bte-agent-panel > div,
+.bte-agent-panel > .block,
+.bte-agent-panel > .form {
+  display: flex !important;
+  flex-direction: column !important;
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  width: 100% !important;
+}
+
+.bte-agent-panel .block:has(.bte-agent-trace),
+.bte-agent-panel .block:has(.bte-trace-panel),
+.bte-agent-panel .html-container:has(.bte-trace-panel),
+.bte-panel-trace .bte-agent-panel .block,
+.bte-panel-trace .bte-agent-panel .form,
+.bte-panel-trace .bte-agent-panel .wrap,
+.bte-panel-trace .bte-agent-panel .html-container,
+.bte-panel-trace .bte-agent-panel .prose {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  overflow: hidden !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  box-sizing: border-box !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.bte-panel-trace .bte-agent-panel .html-container:has(.bte-trace-panel),
+.bte-panel-trace .bte-agent-panel .prose:has(.bte-trace-panel) {
+  width: 100% !important;
+}
+
+.bte-trace-panel {
+  flex: 1 1 auto !important;
+  height: 100% !important;
+  max-height: 100% !important;
+  min-height: 0 !important;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 4px 10px 0;
+  box-sizing: border-box;
+}
+
+.bte-trace-panel-header {
+  flex: 0 0 auto;
+  padding: 0 4px 10px;
+  border-bottom: 1px solid var(--bte-line);
+  margin-bottom: 10px;
+}
+
+.bte-trace-panel-header strong {
+  display: block;
+  color: var(--bte-ink);
+  font-size: 18px;
+  line-height: 1.25;
+  padding: 0 2px;
+  overflow: visible;
+  word-break: normal;
+}
+
+.bte-trace-subtitle {
+  margin: 6px 0 0;
+  padding: 0 2px;
+  color: var(--bte-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.bte-trace-steps {
+  flex: 1 1 auto;
+  min-height: 0;
+  max-height: calc(430px - 32px - 92px);
+  overflow-x: hidden;
+  overflow-y: auto !important;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 0 2px 8px 0;
+  scrollbar-gutter: stable;
+}
+
+.bte-trace-steps::-webkit-scrollbar {
+  width: 8px;
+}
+
+.bte-trace-steps::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 999px;
+}
+
+.bte-trace-steps::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.bte-trace-empty {
+  margin: 0;
+  color: var(--bte-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.bte-trace-empty--active {
+  color: var(--bte-ink);
+}
+
+.bte-trace-empty--error {
+  color: #b42318;
+}
+
+.bte-trace-status {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.bte-trace-status--complete {
+  color: #067647;
+  background: #ecfdf3;
+  border: 1px solid #abefc6;
+}
+
+.bte-trace-status--running {
+  color: #175cd3;
+  background: #eff8ff;
+  border: 1px solid #b2ddff;
+}
+
+.bte-trace-status--failed {
+  color: #b42318;
+  background: #fef3f2;
+  border: 1px solid #fecdca;
+}
+
+.bte-trace-status--unknown {
+  color: #344054;
+  background: #f2f4f7;
+  border: 1px solid #eaecf0;
+}
+
+.bte-trace-step-summary {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  padding: 10px 12px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.bte-trace-step-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.bte-trace-step-meta {
+  color: #475467;
+  font-size: 11px;
+  font-weight: 600;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.bte-trace-meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px 12px;
+  margin: 0 0 10px;
+  padding: 10px;
+  border: 1px solid #eef2f7;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.bte-trace-meta dt {
+  margin: 0;
+  color: #667085;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.bte-trace-meta dd {
+  margin: 2px 0 0;
+  color: #101828;
+  font-size: 12px;
+  line-height: 1.4;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.bte-trace-step-summary::-webkit-details-marker {
+  display: none;
+}
+
+.bte-trace-step {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  margin-bottom: 8px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.bte-trace-step:last-child {
+  margin-bottom: 0;
+}
+
+.bte-trace-step-title {
+  color: var(--bte-ink);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.bte-trace-step-teaser {
+  color: var(--bte-muted);
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.bte-trace-step[open] .bte-trace-step-summary {
+  border-bottom: 1px solid #eef2f7;
+  background: #f8fbff;
+}
+
+.bte-trace-step-body {
+  padding: 10px 12px 12px;
+}
+
+.bte-trace-summary {
+  margin: 0 0 8px;
+  color: #334155;
+  font-size: 13px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.bte-trace-subdetails {
+  margin-top: 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  padding: 8px 10px;
+  background: #f9fafb;
+}
+
+.bte-trace-subdetails summary {
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.bte-trace-subdetails pre {
+  margin: 8px 0 0;
+  padding: 8px;
+  border-radius: 8px;
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 220px;
+  overflow: auto;
+}
+
+.bte-panel-trace {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .bte-panel-result .bte-mini-card,
 .bte-panel-result .bte-mini-chart span {
   animation-play-state: paused !important;
@@ -1503,39 +2334,58 @@ gradio-app,
 }
 
 .bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="ready"]) ~ .bte-hero-grid .bte-panel-analysis .bte-formation--analysis,
-.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="ready"]) ~ .bte-hero-grid .bte-panel-result .bte-formation--result,
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="ready"]) ~ .bte-hero-grid .bte-panel-result .bte-agent-panel,
 .bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="processing"]) ~ .bte-hero-grid .bte-panel-upload .bte-upload-card,
-.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="processing"]) ~ .bte-hero-grid .bte-panel-result .bte-formation--result,
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="processing"]) ~ .bte-hero-grid .bte-panel-result .bte-agent-panel,
 .bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="done"]) ~ .bte-hero-grid .bte-panel-upload .bte-upload-card,
 .bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="done"]) ~ .bte-hero-grid .bte-panel-analysis .bte-formation--analysis {
   opacity: 0.42;
   filter: saturate(0.5);
 }
 
-.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="ready"]) ~ .bte-hero-grid .bte-panel-upload .bte-upload-card,
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="ready"]) ~ .bte-hero-grid .bte-panel-upload .block:has(.bte-upload-card),
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="ready"]) ~ .bte-hero-grid .bte-panel-upload div:has(> .bte-upload-card),
 .bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="processing"]) ~ .bte-hero-grid .bte-panel-analysis .bte-formation--analysis,
-.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="done"]) ~ .bte-hero-grid .bte-panel-result .bte-formation--result {
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="done"]) ~ .bte-hero-grid .bte-panel-trace .block:has(.bte-agent-panel),
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="done"]) ~ .bte-hero-grid .bte-panel-trace div:has(> .bte-agent-panel) {
   opacity: 1;
-  filter: saturate(1);
+  filter: saturate(1.08);
+  transform: translateY(-1px);
+  border: 2px solid transparent !important;
+  background:
+    linear-gradient(var(--bte-page), var(--bte-page)) padding-box,
+    var(--bte-active-ring) border-box !important;
+  box-shadow: var(--bte-shadow-strong) !important;
+}
+
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="ready"]) ~ .bte-hero-grid .bte-panel-upload .block:has(.bte-upload-card) .bte-shell,
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="ready"]) ~ .bte-hero-grid .bte-panel-upload .bte-upload-card,
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="ready"]) ~ .bte-hero-grid .bte-panel-upload .block:has(.bte-upload-card) .bte-upload-card {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="processing"]) ~ .bte-hero-grid .bte-panel-analysis .bte-formation--analysis,
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="done"]) ~ .bte-hero-grid .bte-panel-trace .block:has(.bte-agent-panel),
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="done"]) ~ .bte-hero-grid .bte-panel-trace div:has(> .bte-agent-panel) {
+  background:
+    linear-gradient(var(--bte-surface), var(--bte-surface)) padding-box,
+    var(--bte-active-ring) border-box !important;
 }
 
 .bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="ready"]) ~ .bte-hero-grid .bte-panel-analysis .bte-formation--analysis,
 .bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="done"]) ~ .bte-hero-grid .bte-panel-upload .bte-upload-card,
-.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="ready"]) ~ .bte-hero-grid .bte-panel-result .bte-formation--result,
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="ready"]) ~ .bte-hero-grid .bte-panel-result .bte-agent-panel,
 .bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="processing"]) ~ .bte-hero-grid .bte-panel-upload .bte-upload-card,
-.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="processing"]) ~ .bte-hero-grid .bte-panel-result .bte-formation--result,
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="processing"]) ~ .bte-hero-grid .bte-panel-result .bte-agent-panel,
 .bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="done"]) ~ .bte-hero-grid .bte-panel-analysis .bte-formation--analysis {
   animation-play-state: paused !important;
 }
 
 .bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="processing"]) ~ .bte-hero-grid .bte-panel-analysis .bte-formation--analysis,
-.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="done"]) ~ .bte-hero-grid .bte-panel-result .bte-formation--result {
-  animation-play-state: running !important;
-}
-
-.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="done"]) ~ .bte-hero-grid .bte-panel-result .bte-smart-report,
-.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="done"]) ~ .bte-hero-grid .bte-panel-result .bte-mini-card,
-.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="done"]) ~ .bte-hero-grid .bte-panel-result .bte-mini-chart span {
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="done"]) ~ .bte-hero-grid .bte-panel-trace .block:has(.bte-agent-panel),
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="done"]) ~ .bte-hero-grid .bte-panel-trace div:has(> .bte-agent-panel) {
   animation-play-state: running !important;
 }
 
@@ -1547,7 +2397,6 @@ gradio-app,
   animation-play-state: running !important;
 }
 
-.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="done"]) ~ .bte-hero-grid .bte-panel-result .bte-formation--result .bte-smart-report,
 .bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="ready"]) ~ .bte-hero-grid .bte-panel-upload .bte-upload-card {
   animation-play-state: paused !important;
 }
@@ -1823,12 +2672,121 @@ gradio-app,
   box-shadow: none !important;
 }
 
-.bte-upload-hint {
-  margin: 0 0 10px !important;
-  color: var(--bte-muted) !important;
-  font-size: 13px !important;
-  font-weight: 650 !important;
-  text-align: center !important;
+.bte-panel-upload .bte-uploader [class*="drop"],
+.bte-panel-upload .bte-uploader [class*="upload"] {
+  flex: 1 1 auto !important;
+  min-height: 0 !important;
+  max-height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0 !important;
+  padding: 0 !important;
+  overflow: hidden !important;
+  box-sizing: border-box !important;
+}
+
+.bte-panel-upload .bte-uploader [data-testid="block-label"],
+.bte-panel-upload .bte-uploader [data-testid="status-tracker"],
+.bte-panel-upload .bte-uploader .icon-button-wrapper,
+.bte-panel-upload .bte-uploader .file-preview-holder {
+  display: none !important;
+}
+
+.bte-panel-upload .bte-uploader > button,
+.bte-panel-upload .bte-uploader button[class*="center"] {
+  flex: 1 1 auto !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  margin: 0 !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: pointer !important;
+}
+
+.bte-panel-upload .bte-uploader button .wrap:not(:has(.uploading)) {
+  font-size: 0 !important;
+  line-height: 0 !important;
+  color: transparent !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 0 !important;
+}
+
+.bte-panel-upload .bte-uploader button .or {
+  display: none !important;
+}
+
+.bte-panel-upload .bte-uploader .wrap:has(.uploading),
+.bte-panel-upload .bte-uploader .wrap:has(.progress-bar) {
+  flex: 1 1 auto !important;
+  width: 100% !important;
+  height: 100% !important;
+  min-height: 0 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  position: relative !important;
+  font-size: 0 !important;
+  color: transparent !important;
+}
+
+.bte-panel-upload .bte-uploader .wrap:has(.uploading) > *,
+.bte-panel-upload .bte-uploader .wrap:has(.progress-bar) > * {
+  display: none !important;
+}
+
+.bte-panel-upload .bte-uploader .wrap:has(.uploading)::before,
+.bte-panel-upload .bte-uploader .wrap:has(.progress-bar)::before {
+  content: "";
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  background:
+    radial-gradient(circle at 50% 50%, var(--bte-page) 0 56%, transparent 57%),
+    conic-gradient(from 0deg, var(--bte-green), var(--bte-blue), var(--bte-red), var(--bte-green));
+  animation: bte-spin 1.05s linear infinite;
+  box-shadow: 0 12px 30px rgba(17, 24, 39, 0.08);
+}
+
+.bte-uploader [class*="drop"],
+.bte-uploader [class*="upload"] {
+  min-height: 220px !important;
+}
+
+.bte-panel-upload .bte-uploader svg,
+.bte-panel-upload .bte-shell .icon-wrap,
+.bte-panel-upload .bte-shell .icon-wrap svg {
+  width: 72px !important;
+  height: 72px !important;
+  flex: 0 0 auto !important;
+}
+
+.bte-panel-upload .bte-uploader button .icon-wrap {
+  background: var(--bte-active-ring) !important;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'/%3E%3Cpolyline points='17 8 12 3 7 8'/%3E%3Cline x1='12' y1='3' x2='12' y2='15'/%3E%3C/svg%3E") !important;
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4'/%3E%3Cpolyline points='17 8 12 3 7 8'/%3E%3Cline x1='12' y1='3' x2='12' y2='15'/%3E%3C/svg%3E") !important;
+  -webkit-mask-repeat: no-repeat !important;
+  mask-repeat: no-repeat !important;
+  -webkit-mask-position: center !important;
+  mask-position: center !important;
+  -webkit-mask-size: contain !important;
+  mask-size: contain !important;
+}
+
+.bte-panel-upload .bte-uploader button .icon-wrap svg {
+  opacity: 0 !important;
+  visibility: hidden !important;
+  pointer-events: none !important;
 }
 
 .bte-shell .file-preview,
@@ -1841,51 +2799,90 @@ gradio-app,
 .bte-shell [class*="drop"],
 .bte-shell [class*="upload"] {
   background: var(--bte-page) !important;
-  border-color: #d8e2ee !important;
+  border: 0 !important;
   border-radius: 18px !important;
   color: var(--bte-ink) !important;
+  box-shadow: none !important;
+  outline: none !important;
 }
 
-.bte-uploader [class*="drop"],
-.bte-uploader [class*="upload"] {
-  min-height: 250px !important;
+.bte-panel-upload .bte-shell .block,
+.bte-panel-upload .bte-shell .form,
+.bte-panel-upload .bte-shell .html-container,
+.bte-panel-upload .bte-uploader,
+.bte-panel-upload .bte-uploader > div,
+.bte-panel-upload .bte-uploader > div > div,
+.bte-panel-upload .bte-uploader [class*="drop"],
+.bte-panel-upload .bte-uploader [class*="upload"],
+.bte-panel-upload .bte-shell [class*="drop"],
+.bte-panel-upload .bte-shell [class*="upload"] {
+  border: 0 !important;
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 .bte-selected-document {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 14px;
+  gap: 0;
   align-items: stretch;
-  min-height: 220px;
-  border: 1px solid #d8e2ee;
-  border-radius: 18px;
-  padding: 22px;
-  background: var(--bte-page);
+  height: 100%;
+  min-height: 100%;
+  border: 0;
+  border-radius: 0;
+  padding: 0;
+  background: transparent;
+}
+
+.bte-upload-card:has(.bte-selected-document) .bte-selected-document {
+  height: 100% !important;
+  min-height: 100% !important;
+  padding: 0 !important;
+  border: 0 !important;
+  background: transparent !important;
 }
 
 .bte-selected-preview {
   position: relative;
-  min-height: 260px;
-  border-radius: 22px;
-  border: 1px solid rgba(216, 226, 238, 0.9);
+  height: 100%;
+  min-height: 100%;
+  border-radius: 14px;
+  border: 0;
   background: var(--bte-page);
   overflow: hidden;
+  display: block;
+}
+
+.bte-upload-card:has(.bte-selected-document) .bte-selected-preview {
+  height: 100% !important;
+  min-height: 100% !important;
+  border: 0 !important;
+  border-radius: 12px !important;
 }
 
 .bte-upload-preview-image,
 .bte-upload-preview-placeholder {
   position: absolute;
-  inset: 18px;
-  border-radius: 20px;
+  inset: 0;
+  border-radius: 12px;
 }
 
 .bte-upload-preview-image {
-  width: calc(100% - 36px);
-  height: calc(100% - 36px);
-  object-fit: cover;
-  filter: blur(1.8px) saturate(0.78) contrast(0.92);
-  transform: scale(1.03);
-  box-shadow: 0 16px 35px rgba(18, 32, 56, 0.08);
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: center center;
+  filter: saturate(0.98) contrast(1.03);
+  transform: none;
+  box-shadow: none;
+}
+
+.bte-upload-card:has(.bte-selected-document) .bte-upload-preview-image {
+  inset: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: contain !important;
+  object-position: center center !important;
 }
 
 .bte-upload-preview-placeholder {
@@ -1958,9 +2955,8 @@ gradio-app,
   position: absolute;
   inset: 0;
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.04)),
-    radial-gradient(circle at 50% 46%, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0) 40%);
-  backdrop-filter: blur(1.8px);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), rgba(255, 255, 255, 0));
+  pointer-events: none;
 }
 
 .bte-selected-document p:last-child {
@@ -2007,14 +3003,14 @@ gradio-app,
   -webkit-text-fill-color: var(--bte-ink) !important;
 }
 
-.bte-shell [class*="drop"] {
-  border-style: dashed !important;
-  border-width: 2px !important;
-}
-
 .bte-shell svg,
 .bte-shell .icon-wrap {
   color: var(--bte-blue) !important;
+}
+
+.bte-panel-upload .bte-uploader button .icon-wrap {
+  color: transparent !important;
+  -webkit-text-fill-color: transparent !important;
 }
 
 button.bte-action,
@@ -2608,12 +3604,19 @@ button.bte-action *,
 }
 
 .bte-final-report {
+  --bte-report-stack-gap: 12px;
   width: var(--bte-rail) !important;
   max-width: var(--bte-rail) !important;
   margin: 0 auto !important;
   background: rgb(248, 249, 252) !important;
   align-content: start;
-  gap: 12px;
+  gap: var(--bte-report-stack-gap);
+}
+
+.bte-final-report > .bte-ideal-hero,
+.bte-final-report > .bte-ideal-stats,
+.bte-final-report > .bte-ideal-grid {
+  margin: 0;
 }
 
 .bte-final-report .bte-ideal-marker {
@@ -2630,12 +3633,13 @@ button.bte-action *,
   align-items: center;
   justify-content: space-between;
   gap: 22px;
-  padding: 24px 28px 14px;
+  padding: 24px 28px;
+  margin: 0;
   border: 1px solid rgba(255, 255, 255, 0.42);
   border-radius: var(--bte-radius);
   color: #ffffff;
   background:
-    linear-gradient(120deg, rgba(18, 128, 92, 0.98) 0%, rgba(37, 99, 235, 0.95) 58%, rgba(191, 52, 52, 0.82) 100%),
+    linear-gradient(120deg, rgba(191, 52, 52, 0.82) 0%, rgba(37, 99, 235, 0.95) 58%, rgba(18, 128, 92, 0.98) 100%),
     #12805c;
   box-shadow: 0 6px 16px rgba(17, 24, 39, 0.045);
 }
@@ -2661,7 +3665,7 @@ button.bte-action *,
 .bte-ideal-stats {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 12px;
+  gap: var(--bte-report-stack-gap, 12px);
   margin: 0;
 }
 
@@ -2748,14 +3752,14 @@ button.bte-action *,
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: start;
-  gap: 12px;
-  margin-top: 14px;
+  gap: var(--bte-report-stack-gap, 12px);
+  margin: 0;
 }
 
 .bte-ideal-column {
   display: grid;
   align-content: start;
-  gap: 12px;
+  gap: var(--bte-report-stack-gap, 12px);
 }
 
 .bte-ideal-doc:has(#bte-filter-ideal:checked) .bte-ideal-marker:not(.bte-ideal-marker--ideal),
@@ -3042,6 +4046,36 @@ button.bte-action *,
     gap: 18px;
   }
 
+  .bte-title-copy {
+    padding-right: 0;
+    padding-bottom: 18px;
+  }
+
+  .bte-title-copy::after,
+  .bte-title-hackathon-wrap::after {
+    display: none;
+  }
+
+  .bte-title-hackathon-wrap {
+    padding-right: 0;
+    padding-bottom: 18px;
+  }
+
+  .bte-title-copy,
+  .bte-title-hackathon-wrap,
+  .bte-title-credits-wrap {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.42);
+  }
+
+  .bte-title-credits-wrap {
+    padding-left: 0;
+    border-bottom: 0;
+  }
+
+  .bte-hack-badges-grid {
+    grid-template-columns: 1fr;
+  }
+
   .bte-title-attribution-wrap {
     justify-self: start;
     width: 100%;
@@ -3157,6 +4191,11 @@ button.bte-action *,
     height: 80px;
   }
 
+  .bte-panel-upload .bte-uploader [class*="drop"],
+  .bte-panel-upload .bte-uploader [class*="upload"] {
+    min-height: 0 !important;
+  }
+
   .bte-uploader [class*="drop"],
   .bte-uploader [class*="upload"] {
     min-height: 210px !important;
@@ -3250,7 +4289,7 @@ with gr.Blocks(title="Blood Test Explainer") as demo:
         "border:0 !important;box-shadow:none !important;padding:0 !important;}</style>"
     )
     with gr.Row(equal_height=True, elem_classes=["bte-title"]):
-        with gr.Column(scale=1, min_width=420, elem_classes=["bte-title-copy"]):
+        with gr.Column(scale=2, min_width=260, elem_classes=["bte-title-copy"]):
             gr.HTML(
                 """
                 <div>
@@ -3260,7 +4299,9 @@ with gr.Blocks(title="Blood Test Explainer") as demo:
                 </div>
                 """
             )
-        with gr.Column(scale=0, min_width=300, elem_classes=["bte-title-attribution-wrap"]):
+        with gr.Column(scale=2, min_width=250, elem_classes=["bte-title-hackathon-wrap"]):
+            gr.HTML(hero_hackathon_panel_html())
+        with gr.Column(scale=0, min_width=260, elem_classes=["bte-title-credits-wrap"]):
             gr.HTML(hero_attribution_html())
 
     workflow_phase = gr.HTML(
@@ -3281,7 +4322,7 @@ with gr.Blocks(title="Blood Test Explainer") as demo:
           </div>
           <div class="bte-step-heading bte-step-heading--report">
             <span>3</span>
-            <h2>Get your blood test results in the clearest possible format</h2>
+            <h2>Review the agent pipeline steps for your blood tests</h2>
           </div>
         </div>
         """,
@@ -3292,10 +4333,10 @@ with gr.Blocks(title="Blood Test Explainer") as demo:
         with gr.Column(scale=4, min_width=320, elem_classes=["bte-workflow-panel", "bte-panel-upload"]):
             with gr.Group(elem_classes=["bte-shell", "bte-upload-card"]):
                 upload_hint = gr.HTML(
-                    '<p class="bte-upload-hint">Supported formats: PDF</p>',
+                    '<p class="bte-upload-hint">Supported formats: PDF, PNG, JPEG, WebP</p>',
                     elem_classes=["bte-upload-hint-wrap"],
                 )
-                with gr.Group() as upload_dropzone:
+                with gr.Group(elem_classes=["bte-upload-dropzone"]) as upload_dropzone:
                     uploaded = gr.File(
                         label="Upload medical test document",
                         file_count="single",
@@ -3303,13 +4344,21 @@ with gr.Blocks(title="Blood Test Explainer") as demo:
                         type="filepath",
                         elem_classes=["bte-uploader"],
                     )
-                selected_document = gr.HTML(selected_document_html(), visible=False)
+                selected_document = gr.HTML(
+                    selected_document_html(),
+                    visible=False,
+                    elem_classes=["bte-selected-document-wrap"],
+                )
 
         with gr.Column(scale=4, min_width=300, elem_classes=["bte-workflow-panel", "bte-panel-analysis"]):
             gr.HTML(analysis_animation_html())
 
-        with gr.Column(scale=4, min_width=300, elem_classes=["bte-workflow-panel", "bte-panel-result"]):
-            gr.HTML(result_preview_html())
+        with gr.Column(scale=4, min_width=300, elem_classes=["bte-workflow-panel", "bte-panel-result", "bte-panel-trace"]):
+            with gr.Group(elem_classes=["bte-shell", "bte-agent-panel"]):
+                agent_trace = gr.HTML(
+                    empty_trace_html(),
+                    elem_classes=["bte-agent-trace"],
+                )
 
     status = gr.HTML(
         _status_html("Ready", "Upload a lab report to create the first interactive extraction draft."),
@@ -3324,17 +4373,17 @@ with gr.Blocks(title="Blood Test Explainer") as demo:
     uploaded.change(
         upload_state,
         inputs=[uploaded],
-        outputs=[upload_dropzone, upload_hint, selected_document, workflow_phase],
+        outputs=[upload_dropzone, upload_hint, selected_document, workflow_phase, agent_trace],
         show_progress="hidden",
     ).then(
         show_processing,
-        outputs=[status, report_panel, report, workflow_phase],
+        outputs=[status, report_panel, report, workflow_phase, agent_trace],
         scroll_to_output=True,
         show_progress="hidden",
     ).then(
         extract_lab_values,
         inputs=[uploaded],
-        outputs=[status, report, report_panel, workflow_phase],
+        outputs=[status, report, report_panel, workflow_phase, agent_trace],
         scroll_to_output=True,
         show_progress="hidden",
     )

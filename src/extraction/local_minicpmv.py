@@ -24,9 +24,10 @@ from __future__ import annotations
 
 import json
 import os
+import time
 from functools import lru_cache
 
-from src.document_processing import document_to_payload_parts
+from src.document_processing import document_intake_metadata, document_to_payload_parts
 from src.grammar import extraction_grammar
 from src.openbmb_client import (
     EXTRACTION_PROMPT,
@@ -34,6 +35,7 @@ from src.openbmb_client import (
     _normalize_notes,
     _normalize_patient,
     _normalize_tests,
+    summarize_document_parts,
 )
 
 
@@ -78,12 +80,14 @@ class LocalMiniCPMVExtractor:
         )
         parts = document_to_payload_parts(file_path, max_pages=max_pages)
 
+        started = time.perf_counter()
         response = llm.create_chat_completion(
             messages=[{"role": "user", "content": [{"type": "text", "text": EXTRACTION_PROMPT}, *parts]}],
             grammar=_grammar(),
             temperature=0.0,
             max_tokens=2048,
         )
+        duration_ms = int((time.perf_counter() - started) * 1000)
         raw = response["choices"][0]["message"]["content"] or "{}"
         # GBNF guarantees valid JSON, but never trust a single parse.
         try:
@@ -101,6 +105,10 @@ class LocalMiniCPMVExtractor:
                 "model_path": os.path.basename(self.model_path),
                 "document_parts": len(parts),
                 "max_pages": max_pages,
+                "user_message_preview": summarize_document_parts(parts),
+                **document_intake_metadata(file_path, parts),
+                "return_code": 0,
+                "duration_ms": duration_ms,
             },
         )
 

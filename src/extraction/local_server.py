@@ -23,10 +23,11 @@ Config (env):
 from __future__ import annotations
 
 import os
+import time
 
 import requests
 
-from src.document_processing import document_to_payload_parts
+from src.document_processing import document_intake_metadata, document_to_payload_parts
 from src.grammar import extraction_grammar
 from src.openbmb_client import (
     EXTRACTION_PROMPT,
@@ -35,6 +36,7 @@ from src.openbmb_client import (
     _normalize_patient,
     _normalize_tests,
     _parse_json_response,
+    summarize_document_parts,
 )
 
 DEFAULT_SERVER_URL = "http://127.0.0.1:8080/v1/chat/completions"
@@ -71,12 +73,14 @@ class LocalServerExtractor:
             # Grammar-constrained decoding: output can only be our {tests, notes} schema.
             payload["grammar"] = extraction_grammar()
 
+        started = time.perf_counter()
         response = requests.post(
             self.url,
             json=payload,
             headers={"Content-Type": "application/json"},
             timeout=self.timeout_seconds,
         )
+        duration_ms = int((time.perf_counter() - started) * 1000)
         response.raise_for_status()
 
         raw = _message_content(response.json())
@@ -89,9 +93,15 @@ class LocalServerExtractor:
             request_summary={
                 "backend": "local-server",
                 "url": self.url,
+                "model": self.model,
                 "document_parts": len(parts),
                 "max_pages": max_pages,
                 "grammar": self.use_grammar,
+                "user_message_preview": summarize_document_parts(parts),
+                **document_intake_metadata(file_path, parts),
+                "http_status": response.status_code,
+                "return_code": 0,
+                "duration_ms": duration_ms,
             },
         )
 
