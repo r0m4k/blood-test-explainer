@@ -1193,7 +1193,7 @@ gradio-app,
   display: grid !important;
   grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   gap: 0 !important;
-  align-items: stretch;
+  align-items: stretch !important;
   border: 1px solid rgba(255, 255, 255, 0.42);
   border-radius: var(--bte-radius);
   background:
@@ -1202,7 +1202,15 @@ gradio-app,
   box-shadow: var(--bte-shadow-strong);
 }
 
-.bte-title.row,
+.gradio-container .row.bte-title.stretch,
+.bte-title.row.stretch,
+.bte-title.row {
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  flex-direction: unset !important;
+  align-items: stretch !important;
+}
+
 .bte-title > .column,
 .bte-title > div > .column,
 .bte-title .column.bte-title-copy,
@@ -1212,9 +1220,68 @@ gradio-app,
   flex-grow: 0 !important;
   flex-shrink: 0 !important;
   flex-basis: auto !important;
-  width: 100% !important;
+  width: auto !important;
   min-width: 0 !important;
   max-width: none !important;
+  display: flex !important;
+  flex-direction: column !important;
+  align-self: stretch !important;
+  height: 100% !important;
+  min-height: 100% !important;
+}
+
+.bte-title .column > .block,
+.bte-title .column > .form,
+.bte-title .column .html-container,
+.bte-title .column .prose {
+  flex: 1 1 auto !important;
+  height: 100% !important;
+  min-height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.bte-title-copy .html-container > div,
+.bte-title-copy .prose > div,
+.bte-title-hackathon-wrap .html-container > div,
+.bte-title-hackathon-wrap .prose > div,
+.bte-title-credits-wrap .html-container > div,
+.bte-title-credits-wrap .prose > div {
+  flex: 1 1 auto !important;
+  height: 100% !important;
+  min-height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.bte-title-copy .html-container > div > p:last-child,
+.bte-title-copy .prose > div > p:last-child {
+  margin-top: auto !important;
+}
+
+.bte-title-hackathon-panel {
+  flex: 1 1 auto !important;
+  height: 100% !important;
+  min-height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 0;
+}
+
+.bte-title-hackathon-wrap .bte-hack-badges {
+  margin-top: auto !important;
+}
+
+.bte-hero-credits {
+  flex: 1 1 auto !important;
+  height: 100% !important;
+  min-height: 100% !important;
+  display: flex !important;
+  flex-direction: column !important;
+}
+
+.bte-title-credits-wrap .bte-hero-attribution {
+  margin-top: auto !important;
 }
 
 .bte-title h1,
@@ -1272,12 +1339,6 @@ gradio-app,
   width: 1px;
   background: rgba(255, 255, 255, 0.42);
   pointer-events: none;
-}
-
-.bte-title-hackathon-panel {
-  display: grid;
-  gap: 0;
-  align-content: start;
 }
 
 .bte-title-hf {
@@ -1464,16 +1525,6 @@ gradio-app,
   white-space: normal;
   overflow: visible;
   text-overflow: clip;
-}
-
-.bte-hack-badge:hover .bte-expand-detail,
-.bte-hack-badge:focus-within .bte-expand-detail {
-  padding-left: 25px;
-}
-
-.bte-hero-badge:hover .bte-expand-detail,
-.bte-hero-badge:focus-within .bte-expand-detail {
-  padding-left: 58px;
 }
 
 .bte-hack-badge:hover .bte-expand-detail,
@@ -1727,8 +1778,17 @@ gradio-app,
 }
 
 .bte-workflow-panel,
-.bte-final-row {
+.bte-final-row,
+.bte-report-panel {
   position: relative;
+}
+
+.bte-report-panel,
+.bte-report-panel > * {
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
 }
 
 .bte-workflow-phase,
@@ -4325,11 +4385,6 @@ button.bte-action *,
 
 
 with gr.Blocks(title="Blood Test Explainer") as demo:
-    # Flatten the report container so only the inner .bte-report card shows (no double box).
-    gr.HTML(
-        "<style>.bte-report-panel,.bte-report-panel>*{background:transparent !important;"
-        "border:0 !important;box-shadow:none !important;padding:0 !important;}</style>"
-    )
     with gr.Group(elem_classes=["bte-title-rail"]):
         with gr.Row(equal_height=True, elem_classes=["bte-title"]):
             with gr.Column(scale=1, min_width=0, elem_classes=["bte-title-copy"]):
