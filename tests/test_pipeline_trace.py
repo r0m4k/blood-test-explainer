@@ -74,16 +74,17 @@ def test_trace_to_html_collapsible_steps():
     extraction = _sample_extraction()
     report = build_health_report(extraction)
     steps = build_pipeline_trace(extraction, report)
-    html = trace_to_html(steps)
+    html = trace_to_html(steps, interactive=True)
     assert "bte-trace-step" in html
     assert html.count('<details class="bte-trace-step">') == len(steps)
+    assert "bte-trace-status--complete" not in html
     assert "Return code" in html
-    assert "bte-trace-status--complete" in html
     assert "Full prompt" in html
     assert "bte-trace-explanation" in html
     assert "Technical details" in html
     assert "This step gets your upload ready for the AI." in html
     assert "In this run:" in html
+    assert 'data-interactive="true"' in html
 
 
 def test_completed_steps_include_technical_details():
@@ -98,12 +99,13 @@ def test_completed_steps_include_technical_details():
 
 def test_empty_trace_html_shows_pending_steps():
     html = empty_trace_html()
-    assert html.count('<details class="bte-trace-step">') == 5
-    assert html.count("bte-trace-status--pending") == 5
-    assert "Pending" in html
+    assert html.count("bte-trace-step--locked") == 5
+    assert '<details class="bte-trace-step">' not in html
+    assert "bte-trace-status--pending" not in html
     assert "Step 1 — Document intake" in html
     assert "Step 5 — Cross-marker pattern detection" in html
-    assert "Waiting for you to upload a lab report." in html
+    assert "Waiting for you to upload a lab report." not in html
+    assert 'data-interactive="false"' in html
 
 
 def test_trace_to_chat_messages_shape():

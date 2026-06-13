@@ -343,17 +343,6 @@ def _format_meta_value(value: Any) -> str:
     return str(value)
 
 
-def _status_badge(status: str) -> str:
-    css = {
-        "complete": "bte-trace-status--complete",
-        "running": "bte-trace-status--running",
-        "failed": "bte-trace-status--failed",
-        "pending": "bte-trace-status--pending",
-    }.get(status, "bte-trace-status--unknown")
-    label = status.replace("_", " ").title()
-    return f'<span class="bte-trace-status {css}">{html.escape(label)}</span>'
-
-
 def _metrics_table(step: PipelineStep) -> str:
     rows: list[tuple[str, str]] = [
         ("Status", step.status.replace("_", " ").title()),
@@ -382,12 +371,16 @@ def _trace_hover_script() -> str:
 
       document.addEventListener("mouseover", function (event) {
         var step = event.target.closest("details.bte-trace-step");
-        if (step) step.open = true;
+        var panel = step && step.closest(".bte-trace-panel");
+        if (!step || !panel || panel.dataset.interactive !== "true") return;
+        step.open = true;
       });
 
       document.addEventListener("mouseout", function (event) {
         var step = event.target.closest("details.bte-trace-step");
-        if (!step || step.contains(event.relatedTarget)) return;
+        var panel = step && step.closest(".bte-trace-panel");
+        if (!step || !panel || panel.dataset.interactive !== "true") return;
+        if (step.contains(event.relatedTarget)) return;
         if (step.dataset.pinned !== "1") step.open = false;
       });
 
@@ -395,7 +388,11 @@ def _trace_hover_script() -> str:
         var summary = event.target.closest("summary.bte-trace-step-summary");
         if (!summary) return;
         var step = summary.closest("details.bte-trace-step");
-        if (!step) return;
+        var panel = step && step.closest(".bte-trace-panel");
+        if (!step || !panel || panel.dataset.interactive !== "true") {
+          event.preventDefault();
+          return;
+        }
         window.requestAnimationFrame(function () {
           step.dataset.pinned = step.open ? "1" : "0";
         });
@@ -405,9 +402,11 @@ def _trace_hover_script() -> str:
     """
 
 
-def _trace_block(body: str) -> str:
+def _trace_block(body: str, *, interactive: bool = True) -> str:
+    panel_class = "bte-trace-panel" if interactive else "bte-trace-panel bte-trace-panel--locked"
+    interactive_attr = "true" if interactive else "false"
     return f"""
-    <section class="bte-trace-panel" aria-label="Agent actions">
+    <section class="{panel_class}" aria-label="Agent actions" data-interactive="{interactive_attr}">
       <div class="bte-trace-steps">
         {body}
       </div>
@@ -443,7 +442,7 @@ def _render_summary_html(summary: str) -> str:
     return "".join(chunks)
 
 
-def step_to_html(step: PipelineStep) -> str:
+def _step_body_sections(step: PipelineStep) -> str:
     sections: list[str] = [_render_summary_html(step.summary)]
     technical = _technical_details_block(step)
     if technical:
@@ -469,16 +468,26 @@ def step_to_html(step: PipelineStep) -> str:
             f"<pre>{html.escape(step.output_preview)}</pre>"
             "</details>"
         )
+    return "".join(sections)
+
+
+def step_to_html(step: PipelineStep, *, interactive: bool = True) -> str:
+    title_html = f'<span class="bte-trace-step-title">{html.escape(step.title)}</span>'
+    if not interactive:
+        return f"""
+    <div class="bte-trace-step bte-trace-step--locked">
+      <div class="bte-trace-step-summary">
+        <div class="bte-trace-step-heading">{title_html}</div>
+      </div>
+    </div>
+    """
     return f"""
     <details class="bte-trace-step">
       <summary class="bte-trace-step-summary">
-        <span class="bte-trace-step-heading">
-          <span class="bte-trace-step-title">{html.escape(step.title)}</span>
-          {_status_badge(step.status)}
-        </span>
+        <div class="bte-trace-step-heading">{title_html}</div>
       </summary>
       <div class="bte-trace-step-body">
-        {"".join(sections)}
+        {_step_body_sections(step)}
       </div>
     </details>
     """
@@ -504,9 +513,9 @@ def _placeholder_pipeline_steps(
     ]
 
 
-def trace_to_html(steps: list[PipelineStep]) -> str:
-    body = "".join(step_to_html(step) for step in steps)
-    return _trace_block(body)
+def trace_to_html(steps: list[PipelineStep], *, interactive: bool = True) -> str:
+    body = "".join(step_to_html(step, interactive=interactive) for step in steps)
+    return _trace_block(body, interactive=interactive)
 
 
 def empty_trace_html() -> str:
@@ -515,7 +524,7 @@ def empty_trace_html() -> str:
         return_code=None,
         pipeline_phase="ready",
     )
-    return trace_to_html(steps)
+    return trace_to_html(steps, interactive=False)
 
 
 def processing_trace_html() -> str:
@@ -524,7 +533,7 @@ def processing_trace_html() -> str:
         return_code=None,
         pipeline_phase="processing",
     )
-    return trace_to_html(steps)
+    return trace_to_html(steps, interactive=False)
 
 
 def error_trace_html(message: str) -> str:
@@ -540,8 +549,8 @@ def error_trace_html(message: str) -> str:
         technical_details=message,
         metadata={"pipeline_phase": "failed"},
     )
-    body = step_to_html(failed_step)
-    return _trace_block(body)
+    body = step_to_html(failed_step, interactive=False)
+    return _trace_block(body, interactive=False)
 
 
 def step_to_markdown(step: PipelineStep) -> str:

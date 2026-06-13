@@ -2347,10 +2347,31 @@ gradio-app,
 .bte-trace-step[open] .bte-trace-step-summary {
   border-bottom: 1px solid #eef2f7;
 }
+
+.bte-trace-step-heading {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
+  width: 100%;
+}
+
+.bte-trace-step--locked .bte-trace-step-summary {
+  cursor: default;
+}
+
+.bte-trace-panel--locked .bte-trace-step--locked .bte-trace-step-summary:hover {
+  background: transparent;
+}
+
+.bte-trace-step-body {
+  padding: 6px 14px 14px;
+}
+
+.bte-trace-explanation,
+.bte-trace-result {
+  padding-left: 2px;
+  padding-right: 2px;
 }
 
 .bte-trace-step-meta {
@@ -2415,10 +2436,6 @@ gradio-app,
   color: var(--bte-muted);
   font-size: 12px;
   line-height: 1.4;
-}
-
-.bte-trace-step-heading {
-  padding: 10px 12px 12px;
 }
 
 .bte-trace-summary {
@@ -2491,6 +2508,11 @@ gradio-app,
   display: flex;
   flex-direction: column;
   min-height: 0;
+}
+
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="ready"]) ~ .bte-hero-grid .bte-trace-panel[data-interactive="false"] .bte-trace-step,
+.bte-workflow-phase:has(.bte-workflow-phase-marker[data-phase="processing"]) ~ .bte-hero-grid .bte-trace-panel[data-interactive="false"] .bte-trace-step {
+  pointer-events: none;
 }
 
 .bte-panel-result .bte-mini-card,
