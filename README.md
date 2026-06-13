@@ -1,166 +1,99 @@
+# Blood Test Explainer, teaching a 1.3B model to read your lab report, offline
+
+We are **Roman and Dimitris**, graduates of the **American College of Greece (Deree) AI Lab**, where we currently do research. We built *Blood Test Explainer* for the Build Small hackathon. You upload a photo or PDF of a blood test, and a small model running entirely on the Space reads it, pulls out the markers, values and reference ranges, and explains what each one means in plain language, grounded in a medical knowledge base.
+
+**Our inspiration was a real problem for real people.** Almost everyone has stared at a lab report, seen a column of numbers and "H"/"L" flags, and had no idea what any of it meant. The information is right there, but it is locked in medical shorthand, and it is exactly the kind of private data you do not want to paste into a chatbot you do not control. We wanted a tool a parent or a neighbor could use on their own laptop, that reads the report, explains it honestly, and never sends their health data anywhere.
+
+Here is the whole pipeline:
+
+```
+PDF / image  ->  MiniCPM-V 4.6 (vision)  ->  structured JSON  ->  KB-grounded explanation
+                 reads the document          markers + values     per-marker + patterns
+```
+
+To make it easy to evaluate, we organized this write-up around the **six merit badges** (each one maps to a concrete engineering decision) and then the **three sponsor technologies** that made it possible.
+
 ---
-title: Blood Test Explainer
-emoji: 📊
-colorFrom: green
-colorTo: blue
-sdk: gradio
-sdk_version: 6.17.3
-python_version: "3.10.13"
-app_file: app.py
-pinned: false
-startup_duration_timeout: 1h
+
+## 🔌 Off the Grid
+
+The whole thing runs on the model in front of you. MiniCPM-V 4.6 is loaded inside the Space and does the reading there; there is no call to OpenAI, Anthropic, or any hosted inference API. For a health tool this is not a nice-to-have, it is the point: your blood test never leaves the machine it is processed on. The same design runs on a laptop with the model on local hardware, which is what "small models, local-first" is supposed to feel like.
+
+## 🎯 Well-Tuned
+
+This is the part we are proudest of, because it started as a failure. The base MiniCPM-V 4.6 is already a strong document reader, so our first instinct was to fine-tune it on our exact extraction schema. That collapsed the model: by memorizing our narrow synthetic format it forgot how to read a real report, and field-level F1 on real reports dropped from 0.66 to 0.08.
+
+We built a field-level evaluation (precision / recall / F1 on hand-labeled real reports) so we could measure every change honestly. Here is the whole journey:
+
+| Iteration | What we did | Marker F1 | Recall | vs base |
+|---|---|---|---|---|
+| **Base MiniCPM-V 4.6** | nothing | **0.655** | 0.529 | |
+| v1, schema LoRA | fit our JSON schema (4k synthetic, 2 epochs, lr 1e-4) | 0.078 | 0.059 | catastrophic |
+| v2, gentler + diverse | lr 2e-5, 1 epoch, varied synthetic layouts | 0.333 | 0.265 | still worse |
+| v3, + real reports | mixed in real labeled reports, oversampled | 0.417 | 0.294 | still worse |
+| **medreason (100 ex)** | **fine-tune on general medical reasoning** | **0.746** | **0.647** | **+0.09** |
+| medreason (4000 ex) | more reasoning data | 0.667 | 0.559 | +0.01 |
+
+![Fine-tuning journey: F1 across our iterations vs the base model](docs/finetune_journey.png)
+
+The breakthrough was to stop teaching the model our schema and teach it general medical knowledge instead. We took a LoRA, froze the vision encoder, and fine-tuned only the language layers on a general medical-reasoning dataset (FreedomIntelligence/medical-o1-reasoning-SFT), text only, nothing about extraction. The model got *better* at extraction (F1 0.66 to 0.75, recall 0.53 to 0.65) because it became a better medical reader in general. A second surprise: 100 reasoning examples beat 4,000, so less was more. We then merged the LoRA into the base and published a single standalone model on the Hub, which is what the Space loads.
+
+![Before / after: base vs the medical-reasoning fine-tune](docs/before_after.png)
+
+## 🦙 Llama Champion
+
+The app ships two interchangeable backends behind one interface. The default runs the model through Transformers, and a second backend runs the same MiniCPM-V through the **llama.cpp** runtime, selectable with a single environment variable. We install the prebuilt llama.cpp wheel so the Space builds without a slow source compile, which means the model can run through the llama.cpp runtime when we point it there, while Transformers stays the default for the hosted demo.
+
+## 🎨 Off-Brand
+
+The interface is a custom frontend, not the default Gradio look. We built a guided three-step "agent trace" (read the document, extract the values, explain the results) with custom HTML/CSS report cards, marker status styling, a workflow timeline, and embedded explanation videos next to flagged markers. The goal was for a non-technical person to follow what the app is doing at every step, instead of facing a bare form.
+
+## 📡 Sharing is Caring
+
+We published our extraction and interpretation **traces on the Hub** as a dataset, so anyone can see exactly what the model read from each report, what it produced, and how the knowledge base turned that into an explanation. It is a small contribution back to the community building on small models, and a transparent record of how the agent behaves.
+
+## 📓 Field Notes
+
+This article is the Field Notes entry. We wanted it to be honest about the parts that did not work (the fine-tune that made things worse) as much as the parts that did, because the most useful thing we can hand the next team is the lesson: do not fine-tune a capable base model on your own narrow output schema, and measure everything before you trust it.
+
 ---
 
-# Blood Test Explainer
+## OpenBMB, the model at the center
 
-Blood test results often arrive as dense PDFs, scans, photos, or lab documents filled with abbreviations, reference ranges, units, and flags. For many people, the result is anxiety rather than understanding: they can see that something is high or low, but they do not know what it means, what questions to ask, or what practical next steps might support better health.
+MiniCPM-V 4.6 is the heart of the project. At roughly 1.3B parameters it is small enough to run offline on the Space and on a laptop, which is the whole premise, yet capable enough to read messy, real-world lab report layouts directly from an image with no separate OCR step. It is also what we fine-tuned for medical reasoning, and it is the model the app ships. Everything the user sees, extraction and explanation, comes from one OpenBMB model.
 
-Blood Test Explainer turns an uploaded blood test into a clear, interactive health dashboard. The goal is to extract the important markers, organize them into a readable visual experience, explain each result in plain language, and help the user prepare for a better conversation with a clinician.
+We also lean on a strict JSON contract from the model so the rest of the app is deterministic:
 
-The project focuses on education and personal clarity, not diagnosis. It should help people understand their lab report, notice which markers may deserve attention, and explore general lifestyle ideas such as food, movement, sleep, and supplement topics that may be worth discussing with a qualified professional.
-
-The final experience should feel calm, trustworthy, and useful:
-
-- Upload a blood test document, image, scan, or PDF.
-- See extracted markers, values, units, and reference ranges.
-- Review results in a polished interactive interface.
-- Understand what each marker generally reflects.
-- Get practical lifestyle-oriented suggestions for supporting specific markers.
-- Generate thoughtful questions to bring to a doctor or healthcare provider.
-
-The long-term vision is to make medical paperwork less intimidating and help people move from confusion to informed action.
-
-## First App Version
-
-The first version focuses only on extraction: upload a lab report and convert it into structured raw values such as marker name, value, unit, reference range, status, source snippet, and confidence.
-
-## Current Pipeline
-
-The app now runs extraction and deterministic knowledge-graph enrichment:
-
-1. The extractor reads an uploaded image, PDF, or text document and returns patient context plus raw lab values.
-2. `src.report_pipeline.build_health_report` resolves marker aliases against `kb/cbc_knowledge_graph.json`, selects age/sex-aware reference context, and merges marker explanations, importance, and food/exercise/supplement guidance.
-3. `app.py` renders the enriched report as the final health-report UI.
-
-The knowledge graph is educational context, not diagnosis. The lab-provided reference range remains the primary comparison when it is available.
-
-## Extraction Backends
-
-The default path is **Transformers vision** with our fine-tuned [blood-test-minicpmv-4_6-medreason](https://huggingface.co/build-small-hackathon/blood-test-minicpmv-4_6-medreason) checkpoint (MiniCPM-V 4.6 + MedReason SFT). It handles PDFs, scans, and photos through the same document pipeline in `src/document_processing.py`.
-
-| `EXTRACTOR_BACKEND` | Used for | PDF / image uploads |
-|---|---|---|
-| `transformers` (default), `auto`, `zerogpu` | Normal app + HF Space | Yes |
-| `llamacpp-gpu` + `LLAMACPP_VISION=1` | Opt-in llama.cpp vision lane | Yes |
-| `llamacpp-gpu` (vision off) | Text-only GGUF lane | No — `.txt` / `.csv` only |
-| `local` / `server` | Local `llama-server` experiments | Yes |
-| `llamacpp` | Local in-process GGUF + mmproj | Yes |
-
-Backend selection lives in `src/extraction/factory.py`.
-
-## Running with llama.cpp
-
-The app does **not** use llama.cpp by default. Enable it only when you need the optional GGUF lane.
-
-### Why keep llama.cpp?
-
-1. **Hackathon badge** — the project can target the **Llama Champion** badge by running inference through `llama-cpp-python` over GGUF inside `@spaces.GPU`.
-2. **Fine-tuned GGUF swap** — after fine-tuning, you can point `LLAMACPP_*` at a quantized GGUF repo without changing the Gradio app.
-3. **Lighter text-only lane** — without `LLAMACPP_VISION=1`, the llama.cpp path skips mmproj and works for plain-text lab exports (`.txt` / `.csv`).
-4. **Local offline experiments** — `EXTRACTOR_BACKEND=local` (external `llama-server`) or `llamacpp` (in-process GGUF + mmproj) for off-grid development.
-
-For normal PDF/image blood-test uploads, keep the default Transformers backend.
-
-### Vision llama.cpp (PDFs and images)
-
-Use the same vision document pipeline as Transformers, but route inference through llama.cpp:
-
-```bash
-pip install -r requirements.txt
-
-export EXTRACTOR_BACKEND=llamacpp-gpu
-export LLAMACPP_VISION=1
-export LLAMACPP_GGUF_REPO=openbmb/MiniCPM-V-4.6-gguf
-export LLAMACPP_MODEL_FILE=MiniCPM-V-4_6-Q4_K_M.gguf
-export LLAMACPP_MMPROJ_FILE=mmproj-model-f16.gguf
-export LLAMACPP_CHAT_HANDLER=MiniCPMv26ChatHandler   # override if your wheel needs a different handler
-
-python app.py
+```json
+{
+  "patient": { "age": "45", "age_years": 45.0, "sex": "male" },
+  "tests": [
+    { "marker": "Hemoglobin", "value": "12.5", "unit": "g/dL",
+      "reference_range": "13.0 - 17.0", "status": "low",
+      "source_text": "Hemoglobin 12.5 g/dL  13.0-17.0  L", "confidence": 0.0 }
+  ],
+  "notes": []
+}
 ```
 
-On Hugging Face Spaces, set the same variables in **Settings → Repository secrets / Variables**, then restart the Space. Generation runs inside `@spaces.GPU` in `src/extraction/llamacpp_gpu.py`.
+## Modal, where the fine-tuning ran
 
-### Text-only llama.cpp (no vision)
+Every training run, the LoRA merge, and the before/after evaluations ran on **Modal** with an A100. The generator builds its own synthetic data on the box, the LoRA trains, the adapter merges into the base, and the merged model is pushed to the Hub, all as Modal functions. Modal also let us iterate fast through the failed runs and the recovery without managing any infrastructure, which is the only reason we found the medical-reasoning approach in time.
 
-For `.txt` / `.csv` uploads only:
+## Codex (OpenAI), how we built fast
 
-```bash
-export EXTRACTOR_BACKEND=llamacpp-gpu
-export LLAMACPP_GGUF_REPO=openbmb/MiniCPM-V-4.6-gguf
-export LLAMACPP_MODEL_FILE=MiniCPM-V-4_6-Q4_K_M.gguf
+We used **Codex** as the commit and pull-request engine throughout. Two people moving quickly under a deadline meant a lot of small, reviewable PRs, and Codex handled the commit/PR mechanics so we could keep our attention on the model and the product. It is also how we kept the repository history clean while the architecture changed underneath us more than once.
 
-python app.py
-```
+---
 
-PDF or image uploads fail with a clear error unless `LLAMACPP_VISION=1` is set.
+## The knowledge base and grounding
 
-### Local llama-server (advanced)
+Across all of this, one rule held: the model never invents medical facts. The facts live in a curated knowledge base, what each marker measures, what a high or low value is commonly associated with, and questions worth asking a doctor, and the model only phrases them. The KB grew from 31 markers to **107 markers with curated explanation videos**, plus **cross-marker patterns** (anemia picture, iron-deficiency, B12, a liver-enzyme cluster, lipid/cardiovascular risk, kidney, thyroid, glycemic) that mean more together than alone.
 
-When pip `llama-cpp-python` is too old for MiniCPM-V 4.6 vision, run a separate server:
+## Limitations and safety
 
-```bash
-llama-server -m model.gguf --mmproj mmproj.gguf --port 8080
-EXTRACTOR_BACKEND=local python app.py
-```
+This is an educational tool, not a diagnosis, and every report says so. The model can misread a value, especially on noisy scans, and our labeled evaluation set is still small, so we treat the numbers as directional. It should help someone understand their results and ask better questions of a clinician, not replace one.
 
-See `src/extraction/local_server.py`.
+---
 
-## Hugging Face Space Deployment
-
-The Hugging Face Space is deployed as a **Gradio Space** with Transformers extraction on ZeroGPU.
-
-Default Space variables:
-
-```bash
-EXTRACTOR_BACKEND=transformers
-ZEROGPU_MODEL_ID=build-small-hackathon/blood-test-minicpmv-4_6-medreason
-```
-
-`ZEROGPU_MODEL_ID` is optional — the app defaults to the fine-tuned repo above. Override with `openbmb/MiniCPM-V-4.6` only for base-model experiments.
-
-Optional llama.cpp badge lane (not enabled in the default deployment):
-
-```bash
-EXTRACTOR_BACKEND=llamacpp-gpu
-LLAMACPP_VISION=1
-LLAMACPP_GGUF_REPO=openbmb/MiniCPM-V-4.6-gguf
-LLAMACPP_MODEL_FILE=MiniCPM-V-4_6-Q4_K_M.gguf
-LLAMACPP_MMPROJ_FILE=mmproj-model-f16.gguf
-```
-
-When a new fine-tuned checkpoint is ready, replace `ZEROGPU_MODEL_ID` (or update `DEFAULT_HF_REPO` in `src/model_paths.py`) for the primary lane and the `LLAMACPP_*` variables for the optional GGUF lane. Do not commit model files to the Space git repo.
-
-This workflow should not be changed back to Docker unless the project intentionally gives up ZeroGPU.
-
-## Local Setup
-
-Default (Transformers vision):
-
-```bash
-pip install -r requirements.txt
-python app.py
-```
-
-Explicit backend:
-
-```bash
-EXTRACTOR_BACKEND=transformers python app.py
-```
-
-The Space runtime also installs `llama-cpp-python` so the optional llama.cpp lane can be enabled without code changes. On Linux x86_64 Spaces it uses the prebuilt CPU manylinux wheel:
-
-```text
-https://github.com/abetlen/llama-cpp-python/releases/download/v0.3.28/llama_cpp_python-0.3.28-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
-```
-
-That avoids both the CUDA runtime mismatch that was causing the Space to abort on `libcudart.so.12` and the slow source build that was timing out on Hugging Face.
+*Built by Roman and Dimitris, American College of Greece (Deree) AI Lab. Thanks to the Build Small hackathon, Gradio, Hugging Face, OpenBMB, OpenAI, and Modal.*
