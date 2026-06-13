@@ -5,7 +5,9 @@ field-level accuracy jump. The model runs through the same ZeroGPU/Transformers 
 uses (here `@spaces.GPU` is a no-op because the `spaces` package isn't installed, so generation
 runs directly on the Modal GPU).
 
-    modal run train/modal_eval.py::compare --finetuned-id dimitriskalligaridis/blood-test-minicpmv-4_6
+    modal run train/modal_eval.py::compare
+
+    modal run train/modal_eval.py::compare --finetuned-id build-small-hackathon/blood-test-minicpmv-4_6-medreason
 
 Writes eval/before_after.json locally with the base vs fine-tuned metrics.
 """
@@ -97,7 +99,7 @@ def eval_model(model_id: str, labels_rel: str = "eval/data/real/labels.jsonl") -
 
 @app.local_entrypoint()
 def compare(
-    finetuned_id: str,
+    finetuned_id: str = "build-small-hackathon/blood-test-minicpmv-4_6-medreason",
     base_id: str = "openbmb/MiniCPM-V-4.6",
     labels_rel: str = "eval/data/real/labels.jsonl",
 ) -> None:

@@ -1,4 +1,4 @@
-"""ZeroGPU extraction backend using the official MiniCPM-V Transformers path."""
+"""ZeroGPU extraction backend using the fine-tuned MiniCPM-V Transformers path."""
 
 from __future__ import annotations
 
@@ -17,8 +17,6 @@ from src.openbmb_client import (
 )
 
 from src.model_paths import TransformersModelSource, resolve_transformers_model_source
-
-DEFAULT_ZEROGPU_MODEL = "openbmb/MiniCPM-V-4.6"
 
 
 class ZeroGPUTransformersExtractor:

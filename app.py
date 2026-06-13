@@ -210,7 +210,7 @@ def hero_hackathon_panel_html() -> str:
         (
             "🎯",
             "Well-Tuned",
-            "MiniCPM-V was fine-tuned on Modal and published on Hugging Face for lab report extraction.",
+            "MiniCPM-V was fine-tuned on Modal with MedReason-style SFT and published on Hugging Face for lab report extraction.",
         ),
         (
             "🎨",
@@ -276,7 +276,7 @@ def hero_attribution_html() -> str:
             "Enabled with OpenBMB",
             "OB",
             "openbmb.png",
-            "MiniCPM-V-4.6 reads uploaded lab reports and extracts marker values, units, and status flags.",
+            "Our fine-tuned MiniCPM-V-4.6 reads uploaded lab reports and extracts marker values, units, and status flags.",
         ),
         (
             "Modal",

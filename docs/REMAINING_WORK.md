@@ -12,7 +12,7 @@
 
 | Area | Now |
 |---|---|
-| Space / app | Live on Transformers (`openbmb/MiniCPM-V-4.6`) |
+| Space / app | Fine-tuned Transformers (`build-small-hackathon/blood-test-minicpmv-4_6-medreason`) |
 | Knowledge graph | 107 markers in `kb/cbc_knowledge_graph.json` |
 | Marker videos | All 107 have `video_url`; ~44 unique YouTube IDs (many reused) |
 | Real eval labels | 2/13 reports fully labeled in `eval/data/real/labels.jsonl` |
@@ -25,18 +25,14 @@
 
 **Owner:** Dimitris (Modal + HF Space vars)
 
-- [ ] Confirm fine-tuned Transformers repo on Hub (e.g. `dimitriskalligaridis/blood-test-minicpmv-4_6`) loads with `transformers[torch]==5.7.0`
-- [ ] If not published yet: finish labeling → `modal run train/modal_finetune.py::main --real-labels eval/data/real/labels_train.jsonl` → `modal run train/modal_finetune.py::merge --repo-id <owner>/<name>`
-- [ ] Set HF Space variables:
-  ```bash
-  EXTRACTOR_BACKEND=transformers
-  ZEROGPU_MODEL_ID=<fine-tuned-repo>
-  ```
-- [ ] Rebuild Space; test 2–3 PDFs from `eval/data/real/`
-- [ ] Run before/after eval: `modal run train/modal_eval.py::compare --finetuned-id <repo>` → save `eval/before_after.json`
+- [x] Fine-tuned Transformers repo on Hub: `build-small-hackathon/blood-test-minicpmv-4_6-medreason`
+- [x] Code default in `src/model_paths.py` → `DEFAULT_HF_REPO`
+- [ ] Confirm Space loads the model after redeploy (2–3 PDFs from `eval/data/real/`)
+- [ ] Set HF Space variable if still on base model: `ZEROGPU_MODEL_ID=build-small-hackathon/blood-test-minicpmv-4_6-medreason` (optional when code default is deployed)
+- [ ] Run before/after eval: `modal run train/modal_eval.py::compare` → save `eval/before_after.json`
 - [ ] *(Optional, Llama badge only)* GGUF via `scripts/convert_to_gguf.sh` + `LLAMACPP_VISION=1` vars (see `README.md`)
 
-**Done when:** Space uses custom model; we have a before/after metric for the article.
+**Done when:** Space uses custom model in production; we have a before/after metric for the article.
 
 ---
 
@@ -47,7 +43,7 @@
 **Edit:** `app.py` (hero, upload hints, status, disclaimers), `src/pipeline_trace.py` (step copy), `README.md` (Space card)
 
 - [ ] One clear pitch: upload → extract → explain → prepare for clinician conversation
-- [ ] Badge claims match reality (Well-Tuned only after custom model is live)
+- [ ] Badge claims match reality (Well-Tuned reflects live fine-tuned model)
 - [ ] Consistent “educational, not diagnosis” disclaimer
 - [ ] Less dev jargon in user-facing text (“pipeline phase”, etc.)
 - [ ] Align hero badges with hackathon criteria (OpenBMB, Modal, HF, off-grid)
@@ -124,7 +120,7 @@
 
 ## Submission checklist
 
-- [ ] Custom model on Space (`ZEROGPU_MODEL_ID`)
+- [x] Custom model wired in code (`DEFAULT_HF_REPO`); [ ] confirm on live Space after deploy
 - [ ] Before/after eval documented
 - [ ] Copy + badges accurate
 - [ ] KG + videos polished

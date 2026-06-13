@@ -46,7 +46,7 @@ The knowledge graph is educational context, not diagnosis. The lab-provided refe
 
 ## Extraction Backends
 
-The default path is **Transformers vision** (OpenBMB MiniCPM-V 4.6). It handles PDFs, scans, and photos through the same document pipeline in `src/document_processing.py`.
+The default path is **Transformers vision** with our fine-tuned [blood-test-minicpmv-4_6-medreason](https://huggingface.co/build-small-hackathon/blood-test-minicpmv-4_6-medreason) checkpoint (MiniCPM-V 4.6 + MedReason SFT). It handles PDFs, scans, and photos through the same document pipeline in `src/document_processing.py`.
 
 | `EXTRACTOR_BACKEND` | Used for | PDF / image uploads |
 |---|---|---|
@@ -123,8 +123,10 @@ Default Space variables:
 
 ```bash
 EXTRACTOR_BACKEND=transformers
-ZEROGPU_MODEL_ID=openbmb/MiniCPM-V-4.6
+ZEROGPU_MODEL_ID=build-small-hackathon/blood-test-minicpmv-4_6-medreason
 ```
+
+`ZEROGPU_MODEL_ID` is optional — the app defaults to the fine-tuned repo above. Override with `openbmb/MiniCPM-V-4.6` only for base-model experiments.
 
 Optional llama.cpp badge lane (not enabled in the default deployment):
 
@@ -136,7 +138,7 @@ LLAMACPP_MODEL_FILE=MiniCPM-V-4_6-Q4_K_M.gguf
 LLAMACPP_MMPROJ_FILE=mmproj-model-f16.gguf
 ```
 
-When the fine-tuned models are ready, replace `ZEROGPU_MODEL_ID` for the primary lane and the `LLAMACPP_*` variables for the optional GGUF lane. Do not commit model files to the Space git repo.
+When a new fine-tuned checkpoint is ready, replace `ZEROGPU_MODEL_ID` (or update `DEFAULT_HF_REPO` in `src/model_paths.py`) for the primary lane and the `LLAMACPP_*` variables for the optional GGUF lane. Do not commit model files to the Space git repo.
 
 This workflow should not be changed back to Docker unless the project intentionally gives up ZeroGPU.
 

@@ -170,7 +170,7 @@ def main(n: int = 2000, epochs: int = 1, lr: float = 2e-5, real_labels: str | No
     print(f"\nLoRA adapters saved to Modal volume 'blood-test-adapters' at {path}")
     print("Next: merge the adapter into the base model and push it to the Hub:")
     print("  modal run train/modal_finetune.py::merge --repo-id <owner>/<model-name>")
-    print("then set ZEROGPU_MODEL_ID=<owner>/<model-name> on the Space (Transformers path; no GGUF).")
+    print("then update DEFAULT_HF_REPO in src/model_paths.py (or ZEROGPU_MODEL_ID on the Space).")
 
 
 @app.function(
@@ -183,7 +183,7 @@ def main(n: int = 2000, epochs: int = 1, lr: float = 2e-5, real_labels: str | No
 def merge_and_push(repo_id: str, adapter_dir: str = "/adapters/minicpmv-lab-lora") -> str:
     """Merge the newest LoRA checkpoint into MiniCPM-V 4.6 and push the merged model to the Hub.
 
-    Deploy by setting ZEROGPU_MODEL_ID=<repo_id> on the Space (Transformers path; no GGUF needed).
+    Deploy by updating DEFAULT_HF_REPO in src/model_paths.py or setting ZEROGPU_MODEL_ID=<repo_id> on the Space.
     Requires a Modal secret named 'huggingface-secret' exposing HF_TOKEN with write access.
     """
     import glob
@@ -227,5 +227,5 @@ def merge_and_push(repo_id: str, adapter_dir: str = "/adapters/minicpmv-lab-lora
 @app.local_entrypoint()
 def merge(repo_id: str, adapter_dir: str = "/adapters/minicpmv-lab-lora") -> None:
     pushed = merge_and_push.remote(repo_id=repo_id, adapter_dir=adapter_dir)
-    print(f"\nDone. On the Space set:  ZEROGPU_MODEL_ID={pushed}")
-    print("Rebuild the Space -> the fine-tuned model is live (Well-Tuned badge).")
+    print(f"\nDone. Update DEFAULT_HF_REPO in src/model_paths.py to {pushed!r}")
+    print("(or set ZEROGPU_MODEL_ID on the Space), then redeploy.")

@@ -9,7 +9,7 @@ This replaced the Docker + `llama-server` path because ZeroGPU is only available
 | Area | Current choice |
 |---|---|
 | Space SDK | `gradio` |
-| Default extraction | Transformers MiniCPM-V 4.6 (`EXTRACTOR_BACKEND=transformers`) |
+| Default extraction | Fine-tuned MiniCPM-V 4.6 (`build-small-hackathon/blood-test-minicpmv-4_6-medreason`) |
 | ZeroGPU worker | `@spaces.GPU` in `src/extraction/zerogpu_transformers.py` |
 | Optional llama.cpp lane | `EXTRACTOR_BACKEND=llamacpp-gpu` (+ `LLAMACPP_VISION=1` for PDF/images) |
 | Transformers variables | `ZEROGPU_MODEL_ID`, `ZEROGPU_MAX_NEW_TOKENS`, `ZEROGPU_DOWNSAMPLE_MODE` |
@@ -25,7 +25,7 @@ Do not switch the Space back to Docker unless the project intentionally gives up
 
 | Value | Behavior |
 |---|---|
-| `transformers` (default) | OpenBMB MiniCPM-V through Transformers vision |
+| `transformers` (default) | Fine-tuned MiniCPM-V through Transformers vision |
 | `auto`, `zerogpu`, `zero-gpu` | Same as `transformers` |
 | `llamacpp-gpu`, `llama-champion` | GGUF through `llama-cpp-python` |
 | `local`, `server` | Local `llama-server` HTTP backend |
@@ -36,10 +36,10 @@ Do not switch the Space back to Docker unless the project intentionally gives up
 
 ```bash
 EXTRACTOR_BACKEND=transformers
-ZEROGPU_MODEL_ID=openbmb/MiniCPM-V-4.6
+ZEROGPU_MODEL_ID=build-small-hackathon/blood-test-minicpmv-4_6-medreason
 ```
 
-This is what the HF Space should use for PDF/image blood-test uploads.
+This is what the HF Space should use for PDF/image blood-test uploads. The env var is optional when it matches `DEFAULT_HF_REPO` in `src/model_paths.py`.
 
 ### Optional llama.cpp path
 
@@ -115,7 +115,7 @@ Primary lane:
 
 ```bash
 EXTRACTOR_BACKEND=transformers
-ZEROGPU_MODEL_ID=openbmb/MiniCPM-V-4.6
+ZEROGPU_MODEL_ID=build-small-hackathon/blood-test-minicpmv-4_6-medreason
 ```
 
 Optional llama.cpp lane:
@@ -130,12 +130,14 @@ No model files are committed to the Space repo.
 
 ## Fine-Tuned Model Swap
 
-When the fine-tuned model is ready:
+Current default: [build-small-hackathon/blood-test-minicpmv-4_6-medreason](https://huggingface.co/build-small-hackathon/blood-test-minicpmv-4_6-medreason).
 
-1. Upload the fine-tuned Transformers checkpoint to a Hugging Face model repo for the primary lane.
+To publish a newer checkpoint:
+
+1. Upload the fine-tuned Transformers checkpoint to a Hugging Face model repo.
 2. Optionally convert/quantize it to GGUF (+ mmproj) for the llama.cpp lane.
 3. Keep the same Gradio architecture.
-4. Change only:
+4. Update `DEFAULT_HF_REPO` in `src/model_paths.py` and/or:
 
 ```bash
 ZEROGPU_MODEL_ID=<owner>/<fine-tuned-minicpm-v-transformers-repo>

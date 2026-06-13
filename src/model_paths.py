@@ -6,7 +6,10 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
-DEFAULT_HF_REPO = "openbmb/MiniCPM-V-4.6"
+# Fine-tuned MiniCPM-V 4.6 for lab extraction (MedReason SFT).
+DEFAULT_HF_REPO = "build-small-hackathon/blood-test-minicpmv-4_6-medreason"
+# Upstream OpenBMB base — eval baselines and training scripts.
+BASE_HF_REPO = "openbmb/MiniCPM-V-4.6"
 
 
 @dataclass(frozen=True)
