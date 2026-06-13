@@ -248,55 +248,6 @@ def _run_llamacpp_generation(
         raise _raise_generation_error(exc, vision=False) from exc
 
 
-@spaces.GPU(duration=120)
-def _run_llamacpp_chat(
-    messages: list[dict[str, str]],
-    repo: str,
-    model_file: str,
-    max_tokens: int,
-    n_ctx: int,
-    n_gpu_layers: int,
-    *,
-    vision_enabled: bool = False,
-    mmproj_file: str = DEFAULT_MMPROJ_FILE,
-    chat_handler: str = DEFAULT_CHAT_HANDLER,
-) -> str:
-    try:
-        model_path = download_hf_file(repo, model_file)
-        if vision_enabled:
-            mmproj_path = download_hf_file(repo, mmproj_file)
-    except Exception as exc:
-        raise RuntimeError(
-            "llama.cpp download failed while preparing the GGUF model: "
-            f"{type(exc).__name__}: {exc}"
-        ) from exc
-
-    try:
-        if vision_enabled:
-            llm = load_vision_llama(model_path, mmproj_path, n_ctx, n_gpu_layers, chat_handler)
-        else:
-            llm = _load_text(model_path, n_ctx, n_gpu_layers)
-    except Exception as exc:
-        label = "vision GGUF model for chat" if vision_enabled else "text-only GGUF model for chat"
-        raise RuntimeError(
-            f"The llama.cpp backend could not load the {label}. "
-            f"Inner error: {type(exc).__name__}: {exc}"
-        ) from exc
-
-    try:
-        response = llm.create_chat_completion(
-            messages=messages,
-            temperature=0.2,
-            max_tokens=max_tokens,
-        )
-        return str(response["choices"][0]["message"].get("content") or "").strip()
-    except Exception as exc:
-        raise RuntimeError(
-            "llama.cpp chat generation failed. "
-            f"Inner error: {type(exc).__name__}: {exc}"
-        ) from exc
-
-
 def _compose_prompt(parts: list[dict[str, Any]]) -> str:
     text_parts: list[str] = [EXTRACTION_PROMPT]
     image_count = 0

@@ -31,7 +31,3 @@ class AutoExtractor:
             self._selected = ZeroGPUTransformersExtractor(model_id=self.model_id)
         return self._selected
 
-
-def runtime_target() -> str:
-    """Local app always runs through Transformers."""
-    return "transformers"

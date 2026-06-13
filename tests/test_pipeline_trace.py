@@ -4,7 +4,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.openbmb_client import EXTRACTION_PROMPT, ExtractionResult
-from src.pipeline_trace import build_pipeline_trace, empty_trace_html, trace_hover_js, trace_to_html, trace_to_chat_messages
+from src.pipeline_trace import build_pipeline_trace, empty_trace_html, trace_hover_js, trace_to_html
 from src.report_pipeline import build_health_report
 
 
@@ -119,19 +119,8 @@ def test_trace_hover_js_registers_listeners_once():
     assert "<script" not in js.lower()
 
 
-def test_trace_to_chat_messages_shape():
-    extraction = _sample_extraction()
-    report = build_health_report(extraction)
-    steps = build_pipeline_trace(extraction, report)
-    messages = trace_to_chat_messages(steps)
-    assert messages[0]["role"] == "assistant"
-    assert all(msg["role"] == "assistant" for msg in messages)
-    assert len(messages) == len(steps) + 1
-
-
 if __name__ == "__main__":
     test_build_pipeline_trace_has_five_steps()
     test_extraction_step_includes_full_prompt()
     test_trace_to_html_collapsible_steps()
-    test_trace_to_chat_messages_shape()
     print("test_pipeline_trace: ok")

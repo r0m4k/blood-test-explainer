@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import html
 import json
-from dataclasses import asdict, dataclass, field
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -615,77 +615,3 @@ def error_trace_html(message: str) -> str:
     body = step_to_html(failed_step, interactive=False)
     return _trace_block(body, interactive=False)
 
-
-def step_to_markdown(step: PipelineStep) -> str:
-    parts = [f"**{step.title}**", step.summary]
-    if step.prompt:
-        parts.append(
-            f"<details><summary>Full prompt</summary>\n\n```\n{step.prompt}\n```\n</details>"
-        )
-    if step.input_preview:
-        parts.append(
-            f"<details><summary>Input preview</summary>\n\n```\n{step.input_preview}\n```\n</details>"
-        )
-    if step.output_preview:
-        parts.append(
-            f"<details><summary>Output preview</summary>\n\n```\n{step.output_preview}\n```\n</details>"
-        )
-    return "\n\n".join(parts)
-
-
-def trace_to_chat_messages(steps: list[PipelineStep]) -> list[dict[str, str]]:
-    intro = (
-        "**Analysis pipeline complete.** Below are the agent steps that processed your document."
-    )
-    messages = [{"role": "assistant", "content": intro}]
-    for step in steps:
-        messages.append({"role": "assistant", "content": step_to_markdown(step)})
-    return messages
-
-
-def serialize_steps(steps: list[PipelineStep]) -> list[dict[str, Any]]:
-    return [asdict(step) for step in steps]
-
-
-def interpretation_to_dict(interpretation: Interpretation) -> dict[str, Any]:
-    return {
-        "flagged": [
-            {
-                "marker": item.marker,
-                "value": item.value,
-                "unit": item.unit,
-                "status": item.status,
-                "reference_range": item.reference_range,
-                "note": item.note,
-                "questions": list(item.questions),
-            }
-            for item in interpretation.flagged
-        ],
-        "normal_count": interpretation.normal_count,
-        "patterns": [{"name": p.name, "note": p.note} for p in interpretation.patterns],
-        "disclaimer": interpretation.disclaimer,
-    }
-
-
-def extraction_to_dict(extraction: ExtractionResult) -> dict[str, Any]:
-    return {
-        "patient": extraction.patient,
-        "tests": extraction.tests,
-        "notes": extraction.notes,
-        "raw_response": extraction.raw_response,
-        "request_summary": extraction.request_summary,
-    }
-
-
-def build_session_state(
-    extraction: ExtractionResult,
-    health_report: dict[str, Any],
-    steps: list[PipelineStep],
-) -> dict[str, Any]:
-    interpretation = build_interpretation(extraction.tests)
-    return {
-        "extraction": extraction_to_dict(extraction),
-        "health_report": health_report,
-        "interpretation": interpretation_to_dict(interpretation),
-        "trace_steps": serialize_steps(steps),
-    }

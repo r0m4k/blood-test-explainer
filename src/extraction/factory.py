@@ -21,7 +21,6 @@ from src.extraction.auto import AutoExtractor
 from src.extraction.llamacpp_gpu import LlamaCppGPUExtractor
 from src.extraction.local_minicpmv import LocalMiniCPMVExtractor
 from src.extraction.local_server import LocalServerExtractor
-from src.extraction.zerogpu_transformers import ZeroGPUTransformersExtractor
 
 _DEFAULT_BACKEND = "transformers"
 _DISABLED_BACKENDS = {"api", "openbmb", "hosted"}

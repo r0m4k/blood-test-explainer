@@ -7,8 +7,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.model_paths import is_transformers_model_dir, resolve_transformers_model_source
 
 
-def test_resolve_uses_hub_download_when_no_local_weights():
+def test_resolve_uses_hub_download_when_no_local_weights(monkeypatch):
     with tempfile.TemporaryDirectory() as tmp:
+        empty_models = Path(tmp) / "models"
+        empty_models.mkdir()
+        monkeypatch.setenv("BTE_MODELS_DIR", str(empty_models))
+        monkeypatch.setenv("HF_HOME", str(Path(tmp) / "hf"))
+        monkeypatch.setattr(
+            "src.model_paths.latest_complete_snapshot",
+            lambda repo_id, hub_cache: None,
+        )
+
         source = resolve_transformers_model_source("openbmb/MiniCPM-V-4.6")
         assert source.local_files_only is False
         assert source.origin == "hub-download"

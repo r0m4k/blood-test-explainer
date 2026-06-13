@@ -33,14 +33,14 @@ The extractor reads PDFs directly (it renders pages to images), so `image` point
 
 ```bash
 # 1) draft labels with the current extractor, then hand-correct into gold
-EXTRACTOR_BACKEND=api OPENBMB_API_KEY=... python eval/run_eval.py \
-    --labels eval/data/real/labels.jsonl --run    # prints metrics for labeled rows
+EXTRACTOR_BACKEND=transformers python eval/run_eval.py \
+    --labels eval/data/real/labels.jsonl --run
 ```
 To add a report: run the extractor on it, copy the predicted `tests` into a new `labels.jsonl`
 row, and correct any mistakes against the PDF. Faster and more accurate than typing from scratch.
 
 ## Run the eval
 ```bash
-python eval/run_eval.py --labels eval/data/real/labels.jsonl --run     # needs a model/API
+python eval/run_eval.py --labels eval/data/real/labels.jsonl --run
 ```
 Use it twice (base vs fine-tuned GGUF) for the before/after.

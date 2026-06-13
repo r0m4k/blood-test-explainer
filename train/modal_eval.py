@@ -7,7 +7,7 @@ runs directly on the Modal GPU).
 
     modal run train/modal_eval.py::compare --finetuned-id dimitriskalligaridis/blood-test-minicpmv-4_6
 
-Writes eval/before_after.json locally; render the chart with:  python eval/make_chart.py
+Writes eval/before_after.json locally with the base vs fine-tuned metrics.
 """
 
 from __future__ import annotations
@@ -117,7 +117,7 @@ def compare(
 
     out = Path("eval/before_after.json")
     out.write_text(json.dumps({"base": base, "finetuned": fine}, indent=2), encoding="utf-8")
-    print(f"\n  wrote {out}  ->  render the chart with:  python eval/make_chart.py\n")
+    print(f"\n  wrote {out}\n")
 
 
 @app.function(
