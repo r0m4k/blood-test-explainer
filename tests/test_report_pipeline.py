@@ -85,9 +85,41 @@ def test_knowledge_graph_has_sex_guidance_for_every_marker():
     graph = LabKnowledgeGraph.load()
     assert graph.tests
     assert all("sex_significance" in test for test in graph.tests)
+    assert all(test.get("video_url") for test in graph.tests)
     high = [test for test in graph.tests if test["sex_significance"]["level"] == "high"]
     assert {test["id"] for test in high} == {"hemoglobin", "rbc", "hct", "esr"}
     assert all("sex_specific_statistics_per_group_age" in test for test in high)
+
+
+def test_report_knowledge_payload_includes_video_url():
+    report = build_health_report(
+        _result(
+            [
+                {
+                    "marker": "RBC",
+                    "value": "4.2",
+                    "unit": "10^6/uL",
+                    "status": "normal",
+                    "confidence": 1,
+                }
+            ],
+            patient={"age_years": 25, "sex": "female"},
+        )
+    )
+    knowledge = report["markers"][0]["knowledge"]
+    assert knowledge["video_url"]
+    assert "youtube.com" in knowledge["video_url"]
+
+
+def test_youtube_embed_helpers():
+    from app import _youtube_embed_html, _youtube_video_id
+
+    assert _youtube_video_id("https://www.youtube.com/watch?v=abc123XYZ_-") == "abc123XYZ_-"
+    assert _youtube_video_id("https://youtu.be/abc123XYZ_-") == "abc123XYZ_-"
+    html = _youtube_embed_html("https://www.youtube.com/watch?v=abc123XYZ_-", title="RBC overview")
+    assert "youtube.com/embed/abc123XYZ_-" in html
+    assert "RBC overview" in html
+    assert "No video is available" in _youtube_embed_html(None)
 
 
 # CBC markers in src/markers.py must match KG adult fallback intervals (fix #3).

@@ -1,5 +1,5 @@
 {
-  "schema_version": "1.1",
+  "schema_version": "1.2",
   "title": "Complete Blood Count Knowledge Graph",
   "purpose": "Educational knowledge graph for CBC markers mentioned in the GNU Health laboratory report sample. It is intended for explanation agents, not diagnosis or treatment.",
   "medical_disclaimer": "Reference intervals vary by laboratory method, sex, pregnancy status, altitude, acute illness, medications, and clinical context. Abnormal values should be interpreted by a qualified clinician.",
@@ -176,7 +176,8 @@
         "nih_ods_iron",
         "nih_ods_b12",
         "nih_ods_folate"
-      ]
+      ],
+      "video_url": "https://www.youtube.com/watch?v=wbW90cAlihk"
     },
     {
       "id": "rbc",
@@ -310,7 +311,8 @@
       "source_ids": [
         "medlineplus_rbc",
         "uiowa_cbc_reference"
-      ]
+      ],
+      "video_url": "https://www.youtube.com/watch?v=wbW90cAlihk"
     },
     {
       "id": "hct",
@@ -445,7 +447,8 @@
         "uiowa_cbc_reference",
         "uiowa_pediatric_reference",
         "seattle_childrens_hematocrit"
-      ]
+      ],
+      "video_url": "https://www.youtube.com/watch?v=wbW90cAlihk"
     },
     {
       "id": "mcv",
@@ -512,7 +515,8 @@
         "nih_ods_iron",
         "nih_ods_b12",
         "nih_ods_folate"
-      ]
+      ],
+      "video_url": "https://www.youtube.com/watch?v=wbW90cAlihk"
     },
     {
       "id": "mch",
@@ -575,7 +579,8 @@
         "uiowa_cbc_reference",
         "uiowa_pediatric_reference",
         "nih_ods_iron"
-      ]
+      ],
+      "video_url": "https://www.youtube.com/watch?v=wbW90cAlihk"
     },
     {
       "id": "mchc",
@@ -637,7 +642,8 @@
       "source_ids": [
         "uiowa_cbc_reference",
         "uiowa_pediatric_reference"
-      ]
+      ],
+      "video_url": "https://www.youtube.com/watch?v=wbW90cAlihk"
     },
     {
       "id": "rdw_cv",
@@ -703,7 +709,8 @@
         "nih_ods_iron",
         "nih_ods_b12",
         "nih_ods_folate"
-      ]
+      ],
+      "video_url": "https://www.youtube.com/watch?v=wbW90cAlihk"
     },
     {
       "id": "rdw_sd",
@@ -765,7 +772,8 @@
       ],
       "source_ids": [
         "uiowa_cbc_reference"
-      ]
+      ],
+      "video_url": "https://www.youtube.com/watch?v=wbW90cAlihk"
     },
     {
       "id": "wbc",
@@ -835,7 +843,8 @@
         "medlineplus_differential",
         "uiowa_cbc_reference",
         "uiowa_pediatric_reference"
-      ]
+      ],
+      "video_url": "https://www.youtube.com/watch?v=wbW90cAlihk"
     },
     {
       "id": "neu_percent",
@@ -898,7 +907,8 @@
       "source_ids": [
         "medlineplus_differential",
         "medlineplus_differential_encyclopedia"
-      ]
+      ],
+      "video_url": "https://www.youtube.com/watch?v=wbW90cAlihk"
     },
     {
       "id": "lym_percent",
@@ -961,7 +971,8 @@
       "source_ids": [
         "medlineplus_differential",
         "medlineplus_differential_encyclopedia"
-      ]
+      ],
+      "video_url": "https://www.youtube.com/watch?v=wbW90cAlihk"
     },
     {
       "id": "mon_percent",
@@ -1023,7 +1034,8 @@
       "source_ids": [
         "medlineplus_differential",
         "medlineplus_differential_encyclopedia"
-      ]
+      ],
+      "video_url": "https://www.youtube.com/watch?v=wbW90cAlihk"
     },
     {
       "id": "eos_percent",
@@ -1086,7 +1098,8 @@
       "source_ids": [
         "medlineplus_differential",
         "medlineplus_differential_encyclopedia"
-      ]
+      ],
+      "video_url": "https://www.youtube.com/watch?v=wbW90cAlihk"
     },
     {
       "id": "bas_percent",
@@ -1149,7 +1162,8 @@
       "source_ids": [
         "medlineplus_differential",
         "medlineplus_differential_encyclopedia"
-      ]
+      ],
+      "video_url": "https://www.youtube.com/watch?v=wbW90cAlihk"
     },
     {
       "id": "lym_absolute",
@@ -1214,7 +1228,8 @@
         "uiowa_pediatric_reference",
         "uchicago_cbc_diff",
         "medlineplus_differential"
-      ]
+      ],
+      "video_url": "https://www.youtube.com/watch?v=wbW90cAlihk"
     },
     {
       "id": "gra_absolute",
@@ -1281,7 +1296,8 @@
         "uiowa_pediatric_reference",
         "uchicago_cbc_diff",
         "medlineplus_differential"
-      ]
+      ],
+      "video_url": "https://www.youtube.com/watch?v=wbW90cAlihk"
     },
     {
       "id": "plt",
@@ -1348,7 +1364,8 @@
         "nih_ods_iron",
         "nih_ods_b12",
         "nih_ods_folate"
-      ]
+      ],
+      "video_url": "https://www.youtube.com/watch?v=wbW90cAlihk"
     },
     {
       "id": "esr",
@@ -1483,7 +1500,10 @@
         "seattle_childrens_esr",
         "uchicago_esr_reference",
         "cleveland_clinic_esr"
-      ]
+      ],
+      "video_url": "https://www.youtube.com/watch?v=wbW90cAlihk"
     }
-  ]
+  ],
+  "video_url_policy": "Each test includes a video_url for an embedded YouTube overview. Placeholder links are shared until marker-specific videos are curated.",
+  "default_video_url": "https://www.youtube.com/watch?v=wbW90cAlihk"
 }

@@ -327,14 +327,6 @@ def _pattern_output(interpretation: Interpretation) -> str | None:
     return "\n".join(lines)
 
 
-def _step_teaser(step: PipelineStep) -> str:
-    first_block = step.summary.strip().split("\n\n", 1)[0]
-    first_line = first_block.split("\n", 1)[0]
-    if len(first_line) > 96:
-        return first_line[:93].rstrip() + "..."
-    return first_line
-
-
 def _format_return_code(code: int | None) -> str:
     if code is None:
         return "—"
@@ -381,6 +373,38 @@ def _metrics_table(step: PipelineStep) -> str:
     return f'<dl class="bte-trace-meta">{cells}</dl>'
 
 
+def _trace_hover_script() -> str:
+    return """
+    <script>
+    (function () {
+      if (window.__bteTraceHoverInit) return;
+      window.__bteTraceHoverInit = true;
+
+      document.addEventListener("mouseover", function (event) {
+        var step = event.target.closest("details.bte-trace-step");
+        if (step) step.open = true;
+      });
+
+      document.addEventListener("mouseout", function (event) {
+        var step = event.target.closest("details.bte-trace-step");
+        if (!step || step.contains(event.relatedTarget)) return;
+        if (step.dataset.pinned !== "1") step.open = false;
+      });
+
+      document.addEventListener("click", function (event) {
+        var summary = event.target.closest("summary.bte-trace-step-summary");
+        if (!summary) return;
+        var step = summary.closest("details.bte-trace-step");
+        if (!step) return;
+        window.requestAnimationFrame(function () {
+          step.dataset.pinned = step.open ? "1" : "0";
+        });
+      });
+    })();
+    </script>
+    """
+
+
 def _trace_block(body: str) -> str:
     return f"""
     <section class="bte-trace-panel" aria-label="Agent actions">
@@ -388,6 +412,7 @@ def _trace_block(body: str) -> str:
         {body}
       </div>
     </section>
+    {_trace_hover_script()}
     """
 
 
@@ -451,10 +476,6 @@ def step_to_html(step: PipelineStep) -> str:
           <span class="bte-trace-step-title">{html.escape(step.title)}</span>
           {_status_badge(step.status)}
         </span>
-        <span class="bte-trace-step-meta">
-          Return code: {html.escape(_format_return_code(step.return_code))}
-        </span>
-        <span class="bte-trace-step-teaser">{html.escape(_step_teaser(step))}</span>
       </summary>
       <div class="bte-trace-step-body">
         {"".join(sections)}

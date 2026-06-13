@@ -263,6 +263,7 @@ def _knowledge_payload(node: dict[str, Any] | None) -> dict[str, Any] | None:
         "description": node.get("description"),
         "why_important": node.get("why_important"),
         "instructions_to_improve": node.get("instructions_to_improve") or {},
+        "video_url": node.get("video_url"),
         "sex_significance": node.get("sex_significance") or {},
         "related_tests": node.get("related_tests") or [],
         "source_ids": node.get("source_ids") or [],

@@ -700,6 +700,10 @@ def _marker_card(test: dict[str, Any]) -> str:
             {_guidance_column("Exercise", instructions.get("exercises"))}
             {_guidance_column("Supplements", instructions.get("supplements"))}
           </div>
+          <div class="bte-marker-video">
+            <span>Related video</span>
+            {_youtube_embed_html(knowledge.get("video_url"), title=f"{marker} overview")}
+          </div>
         </div>
       </div>
     </details>
@@ -716,8 +720,6 @@ def _final_marker_card(test: dict[str, Any]) -> str:
     instructions = knowledge.get("instructions_to_improve") or {}
     description = _text(knowledge.get("description"), "No knowledge graph description available for this marker.")
     why = _text(knowledge.get("why_important"), "No knowledge graph importance note available for this marker.")
-    improve = _final_improvement_text(instructions)
-    context = _final_context_text(test)
 
     return f"""
     <article class="bte-ideal-marker bte-ideal-marker--{escape(status)}">
@@ -747,13 +749,10 @@ def _final_marker_card(test: dict[str, Any]) -> str:
           <span>Why it matters</span>
           <p>{escape(why)}</p>
         </div>
-        <div>
-          <span>How to improve</span>
-          <p>{escape(improve)}</p>
-        </div>
-        <div>
-          <span>Reference context</span>
-          <p>{escape(context)}</p>
+        {_improvement_block(instructions)}
+        <div class="bte-marker-video-block">
+          <span>Related video</span>
+          {_youtube_embed_html(knowledge.get("video_url"), title=f"{marker} overview")}
         </div>
       </div>
     </article>
@@ -871,26 +870,46 @@ def _final_numeric_value(marker: dict[str, Any]) -> float | None:
         return None
 
 
-def _final_improvement_text(instructions: dict[str, Any]) -> str:
-    parts = []
-    for label, key in (("Food", "food"), ("Exercise", "exercises"), ("Supplements", "supplements")):
-        items = instructions.get(key)
-        if isinstance(items, list) and items:
-            parts.append(f"{label}: {' '.join(str(item) for item in items[:2])}")
-    return " ".join(parts) or "No improvement guidance is stored for this marker."
+def _improvement_block(instructions: dict[str, Any]) -> str:
+    return f"""
+    <div class="bte-improvement-block">
+      <span>How to improve</span>
+      <div class="bte-guidance bte-guidance--card">
+        {_guidance_column("Food", instructions.get("food"))}
+        {_guidance_column("Exercise", instructions.get("exercises"))}
+        {_guidance_column("Supplements", instructions.get("supplements"))}
+      </div>
+    </div>
+    """
 
 
-def _final_context_text(marker: dict[str, Any]) -> str:
-    reference = _reference_label(marker)
-    sex_context = ((marker.get("knowledge") or {}).get("sex_significance") or {}).get("summary")
-    confidence = _confidence_percent(marker.get("confidence"))
-    source = _text(marker.get("source_text"), "")
-    parts = [reference, f"Extraction confidence: {confidence}%."]
-    if sex_context:
-        parts.append(str(sex_context))
-    if source:
-        parts.append(f"Source row: {source}")
-    return " ".join(parts)
+def _youtube_video_id(video_url: str | None) -> str | None:
+    if not video_url:
+        return None
+    text = str(video_url).strip()
+    match = re.search(
+        r"(?:youtube\.com/watch\?v=|youtu\.be/|youtube\.com/embed/|youtube\.com/shorts/)([A-Za-z0-9_-]{11})",
+        text,
+    )
+    return match.group(1) if match else None
+
+
+def _youtube_embed_html(video_url: str | None, *, title: str = "Marker overview video") -> str:
+    video_id = _youtube_video_id(video_url)
+    if not video_id:
+        return '<p class="bte-video-placeholder">No video is available for this marker yet.</p>'
+    safe_title = escape(title)
+    return f"""
+    <div class="bte-video-embed">
+      <iframe
+        src="https://www.youtube.com/embed/{escape(video_id)}"
+        title="{safe_title}"
+        loading="lazy"
+        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+        allowfullscreen
+      ></iframe>
+    </div>
+    """
 
 
 def _final_patient_context(patient: dict[str, Any]) -> str:
@@ -2317,9 +2336,17 @@ gradio-app,
   padding: 10px 12px;
   cursor: pointer;
   list-style: none;
+  transition: background-color 0.15s ease;
 }
 
-.bte-trace-step-heading {
+.bte-trace-step-summary:hover,
+.bte-trace-step[open] .bte-trace-step-summary {
+  background: #f8fbff;
+}
+
+.bte-trace-step[open] .bte-trace-step-summary {
+  border-bottom: 1px solid #eef2f7;
+}
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -2390,12 +2417,7 @@ gradio-app,
   line-height: 1.4;
 }
 
-.bte-trace-step[open] .bte-trace-step-summary {
-  border-bottom: 1px solid #eef2f7;
-  background: #f8fbff;
-}
-
-.bte-trace-step-body {
+.bte-trace-step-heading {
   padding: 10px 12px 12px;
 }
 
@@ -3656,6 +3678,60 @@ button.bte-action *,
   line-height: 1.45;
 }
 
+.bte-marker-video,
+.bte-marker-video-block {
+  min-width: 0;
+}
+
+.bte-marker-video span,
+.bte-marker-video-block span,
+.bte-improvement-block > span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--bte-ink);
+  font-size: 12px;
+  font-weight: 760;
+  text-transform: uppercase;
+}
+
+.bte-improvement-block .bte-guidance--card {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.bte-improvement-block .bte-guidance--card div {
+  min-width: 0;
+  padding-top: 10px;
+  border-top: 1px solid var(--bte-line);
+  background: transparent;
+  border-radius: 0;
+}
+
+.bte-video-embed {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #0f172a;
+}
+
+.bte-video-embed iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.bte-video-placeholder {
+  margin: 0;
+  color: var(--bte-muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
 .bte-confidence {
   height: 8px;
   border-radius: 999px;
@@ -4099,10 +4175,23 @@ button.bte-action *,
 
 .bte-ideal-marker:hover .bte-ideal-marker-body,
 .bte-ideal-marker:focus-within .bte-ideal-marker-body {
-  max-height: 520px;
+  max-height: 1400px;
   padding-top: 14px;
   opacity: 1;
   transform: translateY(0);
+}
+
+.bte-ideal-marker-body .bte-improvement-block,
+.bte-ideal-marker-body .bte-marker-video-block {
+  padding: 12px;
+  border-radius: 14px;
+  background: var(--bte-page);
+}
+
+.bte-ideal-marker-body .bte-improvement-block .bte-guidance--card div {
+  padding: 0;
+  border-top: 0;
+  background: transparent;
 }
 
 .bte-ideal-marker-body div {
@@ -4403,7 +4492,8 @@ button.bte-action *,
   }
 
   .bte-insight-grid,
-  .bte-guidance {
+  .bte-guidance,
+  .bte-improvement-block .bte-guidance--card {
     grid-template-columns: 1fr;
   }
 
