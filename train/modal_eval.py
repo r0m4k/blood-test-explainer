@@ -177,3 +177,98 @@ def label(pdf_dir: str = "eval/data/real", out: str = "eval/data/real/labels_tra
     print("  Correct each line (fix marker/value/unit/status, delete junk rows), save it as")
     print("  eval/data/real/labels_train.jsonl, then retrain with the real mix-in:")
     print("    modal run train/modal_finetune.py::main --real-labels eval/data/real/labels_train.jsonl\n")
+
+
+@app.function(
+    image=image,
+    gpu="A100",
+    timeout=60 * 60,
+    volumes={"/root/.cache/huggingface": hf_cache},
+    secrets=[modal.Secret.from_name("huggingface-secret")],
+)
+def build_traces(
+    model_id: str = "build-small-hackathon/blood-test-minicpmv-4_6-medreason",
+    pdf_dir_rel: str = "eval/data/real",
+    repo_id: str = "build-small-hackathon/blood-test-explainer-traces",
+) -> str:
+    """Run the deployed agent (extract + KB interpretation) over the real reports and publish the
+    full traces as a public dataset on the Hub (the Sharing-is-Caring badge)."""
+    import json
+    import os
+    import sys
+    from pathlib import Path
+
+    sys.path.insert(0, "/root/app")
+    os.environ["ZEROGPU_QUANTIZE"] = "0"
+    from src.extraction.zerogpu_transformers import ZeroGPUTransformersExtractor
+    from src.interpretation import build_interpretation
+
+    extractor = ZeroGPUTransformersExtractor(model_id=model_id)
+    pdf_dir = Path("/root/app") / pdf_dir_rel
+    traces: list[dict] = []
+    for pdf in sorted(pdf_dir.glob("*.pdf")):
+        try:
+            tests = extractor.extract(str(pdf), max_pages=3).tests
+        except Exception as error:
+            print(f"{pdf.name}: extraction failed - {error}")
+            tests = []
+        interp = build_interpretation(tests)
+        traces.append({
+            "report": pdf.name,
+            "model": model_id,
+            "steps": ["read the document", "extract markers and values", "interpret with the knowledge base"],
+            "extraction": {"n_markers": len(tests), "tests": tests},
+            "interpretation": {
+                "flagged": [
+                    {"marker": c.marker, "value": c.value, "unit": c.unit, "status": c.status,
+                     "reference_range": c.reference_range, "note": c.note, "questions": list(c.questions)}
+                    for c in interp.flagged
+                ],
+                "patterns": [{"name": p.name, "note": p.note} for p in interp.patterns],
+                "normal_count": interp.normal_count,
+                "disclaimer": interp.disclaimer,
+            },
+        })
+        print(f"{pdf.name}: {len(tests)} markers, {len(interp.flagged)} flagged, {len(interp.patterns)} patterns")
+
+    traces_path = Path("/root/traces.jsonl")
+    traces_path.write_text("\n".join(json.dumps(t, ensure_ascii=False) for t in traces), encoding="utf-8")
+
+    readme = (
+        "---\nlicense: mit\ntask_categories:\n- image-text-to-text\ntags:\n- agent-traces\n"
+        "- medical\n- blood-test\n---\n\n"
+        "# Blood Test Explainer - agent traces\n\n"
+        "Agent traces from the Blood Test Explainer app (Build Small hackathon). Each row is one lab "
+        "report run through the full agent: a small vision model reads the document and extracts the "
+        "markers, then a curated medical knowledge base turns the values into a grounded, per-marker "
+        "explanation plus cross-marker patterns.\n\n"
+        f"Model: `{model_id}`, a fine-tuned MiniCPM-V 4.6 running fully offline.\n\n"
+        "Each record has `report`, `model`, `steps`, `extraction` (the structured markers), and "
+        "`interpretation` (flagged markers with grounded notes and doctor-questions, cross-marker "
+        "patterns, and the educational disclaimer). Educational only, not a diagnosis.\n"
+    )
+    readme_path = Path("/root/README.md")
+    readme_path.write_text(readme, encoding="utf-8")
+
+    from huggingface_hub import HfApi
+
+    token = os.environ.get("HF_TOKEN") or os.environ.get("HUGGING_FACE_HUB_TOKEN")
+    if not token:
+        raise RuntimeError("HF_TOKEN not set - add it to the 'huggingface-secret' Modal secret.")
+    api = HfApi(token=token)
+    api.create_repo(repo_id, repo_type="dataset", exist_ok=True)
+    api.upload_file(path_or_fileobj=str(traces_path), path_in_repo="traces.jsonl", repo_id=repo_id, repo_type="dataset")
+    api.upload_file(path_or_fileobj=str(readme_path), path_in_repo="README.md", repo_id=repo_id, repo_type="dataset")
+    print(f"Published {len(traces)} traces to https://huggingface.co/datasets/{repo_id}")
+    return repo_id
+
+
+@app.local_entrypoint()
+def traces(
+    model_id: str = "build-small-hackathon/blood-test-minicpmv-4_6-medreason",
+    repo_id: str = "build-small-hackathon/blood-test-explainer-traces",
+) -> None:
+    # spawn() so the job runs to completion on Modal even if the local connection drops
+    call = build_traces.spawn(model_id=model_id, repo_id=repo_id)
+    print(f"\nLaunched traces build on Modal (call {call.object_id}) — runs in the background.")
+    print(f"When it finishes, the dataset will be live at https://huggingface.co/datasets/{repo_id}")
