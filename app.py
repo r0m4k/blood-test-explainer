@@ -1168,15 +1168,19 @@ gradio-app,
 .bte-title-rail.block,
 .bte-title-rail > div,
 .bte-title-rail .form,
-.bte-title-rail.gr-group {
+.bte-title-rail.gr-group,
+.gradio-container .gr-group.bte-title-rail,
+.gradio-container .block.bte-title-rail {
   width: var(--bte-rail) !important;
   max-width: var(--bte-rail) !important;
   margin-left: auto !important;
   margin-right: auto !important;
   padding: 0 !important;
   background: transparent !important;
+  background-color: transparent !important;
   border: 0 !important;
   box-shadow: none !important;
+  border-radius: 0 !important;
   overflow: visible !important;
 }
 
@@ -1195,7 +1199,8 @@ gradio-app,
   gap: 0 !important;
   align-items: stretch !important;
   border: 1px solid rgba(255, 255, 255, 0.42);
-  border-radius: var(--bte-radius);
+  border-radius: var(--bte-radius) !important;
+  overflow: hidden !important;
   background:
     linear-gradient(120deg, rgba(191, 52, 52, 0.82) 0%, rgba(37, 99, 235, 0.95) 58%, rgba(18, 128, 92, 0.98) 100%),
     #12805c;
@@ -1209,6 +1214,8 @@ gradio-app,
   grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
   flex-direction: unset !important;
   align-items: stretch !important;
+  border-radius: var(--bte-radius) !important;
+  overflow: hidden !important;
 }
 
 .bte-title > .column,
@@ -1797,25 +1804,37 @@ gradio-app,
 }
 
 .bte-step-row-block,
-.bte-step-row-block > div {
+.bte-step-row-block > div,
+.gradio-container .block.bte-step-row-block,
+.gradio-container .block.bte-step-row-block.padded,
+.gradio-container .block.bte-step-row-block .form,
+.bte-step-row-block .form {
   width: var(--bte-rail) !important;
   max-width: var(--bte-rail) !important;
   margin-left: auto !important;
   margin-right: auto !important;
   padding: 0 !important;
   background: transparent !important;
+  background-color: transparent !important;
   border: 0 !important;
   box-shadow: none !important;
+  border-radius: 0 !important;
 }
 
 .bte-step-row-block .prose,
 .bte-step-row-block .html-container,
-.bte-step-row-block .block {
+.bte-step-row-block .block,
+.prose.bte-step-row-block,
+.gradio-container .block.bte-step-row-block .html-container,
+.gradio-container .block.bte-step-row-block .prose,
+.gradio-container .prose.bte-step-row-block {
   padding: 0 !important;
   margin: 0 !important;
   background: transparent !important;
+  background-color: transparent !important;
   border: 0 !important;
   box-shadow: none !important;
+  border-radius: 0 !important;
 }
 
 .bte-status-row,
@@ -1878,6 +1897,8 @@ gradio-app,
   align-items: stretch;
   gap: 16px;
   margin: 0 0 16px;
+  background: transparent !important;
+  background-color: transparent !important;
 }
 
 .bte-step-block,
