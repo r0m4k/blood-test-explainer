@@ -35,3 +35,13 @@ def test_code_fenced_array():
 def test_prose_then_object_is_recovered():
     raw = 'Here are the results:\n{"tests": [{"marker": "HDL", "value": "55"}], "notes": []}'
     assert _normalize_tests(_parse_json_response(raw)["tests"])[0]["marker"] == "HDL"
+
+
+def test_extraction_prompt_includes_field_guide_and_few_shot_examples():
+    from src.openbmb_client import EXTRACTION_PROMPT
+
+    assert "Field guide" in EXTRACTION_PROMPT
+    assert "Few-shot examples" in EXTRACTION_PROMPT
+    assert "Hemoglobin (Hb)" in EXTRACTION_PROMPT
+    assert "Neutrophil, Absolute" in EXTRACTION_PROMPT
+    assert "Remove thousands separators" in EXTRACTION_PROMPT

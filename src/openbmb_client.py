@@ -36,6 +36,15 @@ Return only valid JSON with this exact shape:
   "notes": ["string"]
 }
 
+Field guide (how each test row should look):
+- marker: The test name exactly as printed on the report. Keep abbreviations in parentheses when shown (e.g. "Hemoglobin (Hb)", "Mean Cell Volume (MCV)"). One JSON object per result row — do not merge percent differentials with absolute counts.
+- value: The measured result only, as a string. Use digits for numeric results (no unit). Remove thousands separators ("150,000" → "150000"). Qualitative results stay as printed ("Negative", "Positive", "<5").
+- unit: The measurement unit as printed (e.g. "g/dL", "%", "K/mcL", "mg/dL", "U/L", "cumm"). null if absent.
+- reference_range: The lab's printed normal interval or limit, copied verbatim when possible (e.g. "13.0 - 17.0", "70-99", "<200"). null if missing.
+- status: Compare value to the printed reference range or report flag. Map H/L, LOW/HIGH, *, or out-of-range arrows to "low" or "high". Use "abnormal" for qualitative out-of-range results. Use "unknown" when the range or flag is missing.
+- source_text: A short verbatim snippet from the document for that row (test name + value + unit/flag), under ~120 characters.
+- confidence: 0.0–1.0 — how certain you are that marker, value, and unit are correct.
+
 Rules:
 - Extract pure lab values only.
 - Do not diagnose, interpret, recommend food, supplements, or exercise.
@@ -43,10 +52,117 @@ Rules:
 - Normalize sex to "male", "female", or "unknown"; do not infer sex from the patient's name.
 - Use null for age and age_years when age is missing.
 - Do not invent missing values.
-- Preserve the units and reference ranges exactly as shown when possible.
-- If a marker is unreadable, omit it or add a short note.
+- Preserve units and reference ranges exactly as shown when possible.
+- If a marker is unreadable, omit it or add a short note in "notes".
 - Use null for missing units or reference ranges.
 - Confidence must be a number from 0 to 1.
+
+Few-shot examples (format only — extract from the uploaded document, not these samples):
+
+Example 1 — CBC with flags:
+{
+  "patient": {"age": "58 years", "age_years": 58.0, "sex": "female"},
+  "tests": [
+    {
+      "marker": "Hemoglobin (Hb)",
+      "value": "12.5",
+      "unit": "g/dL",
+      "reference_range": "13.0 - 17.0",
+      "status": "low",
+      "source_text": "Hemoglobin (Hb) 12.5 g/dL L",
+      "confidence": 0.96
+    },
+    {
+      "marker": "Packed Cell Volume (PCV)",
+      "value": "57.5",
+      "unit": "%",
+      "reference_range": "40 - 50",
+      "status": "high",
+      "source_text": "Packed Cell Volume (PCV) 57.5 % H",
+      "confidence": 0.94
+    },
+    {
+      "marker": "Platelet Count",
+      "value": "150000",
+      "unit": "cumm",
+      "reference_range": "150000 - 410000",
+      "status": "normal",
+      "source_text": "Platelet Count 150000 cumm",
+      "confidence": 0.93
+    }
+  ],
+  "notes": []
+}
+
+Example 2 — chemistry panel:
+{
+  "patient": {"age": null, "age_years": null, "sex": "unknown"},
+  "tests": [
+    {
+      "marker": "Glucose",
+      "value": "95",
+      "unit": "mg/dL",
+      "reference_range": "70-99",
+      "status": "normal",
+      "source_text": "Glucose 95 mg/dL",
+      "confidence": 0.95
+    },
+    {
+      "marker": "ALT",
+      "value": "42",
+      "unit": "U/L",
+      "reference_range": "7-56",
+      "status": "normal",
+      "source_text": "ALT 42 U/L",
+      "confidence": 0.92
+    },
+    {
+      "marker": "Creatinine",
+      "value": "1.8",
+      "unit": "mg/dL",
+      "reference_range": "0.6-1.2",
+      "status": "high",
+      "source_text": "Creatinine 1.8 mg/dL H",
+      "confidence": 0.94
+    }
+  ],
+  "notes": []
+}
+
+Example 3 — absolute counts (separate rows from % differentials):
+{
+  "patient": {"age": "34", "age_years": 34.0, "sex": "male"},
+  "tests": [
+    {
+      "marker": "Neutrophils",
+      "value": "60",
+      "unit": "%",
+      "reference_range": "50 - 62",
+      "status": "normal",
+      "source_text": "Neutrophils 60 %",
+      "confidence": 0.91
+    },
+    {
+      "marker": "Neutrophil, Absolute",
+      "value": "3.5",
+      "unit": "K/mcL",
+      "reference_range": "1.8-7.8",
+      "status": "normal",
+      "source_text": "Neutrophil, Absolute 3.5 K/mcL",
+      "confidence": 0.90
+    },
+    {
+      "marker": "White Blood Cell (WBC)",
+      "value": "6.9",
+      "unit": "K/mcL",
+      "reference_range": "4.8-10.8",
+      "status": "normal",
+      "source_text": "White Blood Cell (WBC) 6.9 K/mcL",
+      "confidence": 0.93
+    }
+  ],
+  "notes": []
+}
 """.strip()
 
 
