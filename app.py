@@ -230,7 +230,7 @@ def hero_hackathon_panel_html() -> str:
         (
             "📓",
             "Field Notes",
-            "Build notes, runbooks, and deployment logs document what we built and learned.",
+            "README, runbook, and eval docs capture how the app was built and how to run it.",
         ),
     ]
     badge_items = "\n".join(
