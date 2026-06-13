@@ -4,7 +4,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.openbmb_client import EXTRACTION_PROMPT, ExtractionResult
-from src.pipeline_trace import build_pipeline_trace, trace_to_html, trace_to_chat_messages
+from src.pipeline_trace import build_pipeline_trace, empty_trace_html, trace_to_html, trace_to_chat_messages
 from src.report_pipeline import build_health_report
 
 
@@ -80,6 +80,15 @@ def test_trace_to_html_collapsible_steps():
     assert "Return code" in html
     assert "bte-trace-status--complete" in html
     assert "Full prompt" in html
+
+
+def test_empty_trace_html_shows_pending_steps():
+    html = empty_trace_html()
+    assert html.count('<details class="bte-trace-step">') == 5
+    assert html.count("bte-trace-status--pending") == 5
+    assert "Pending" in html
+    assert "Step 1 — Document intake" in html
+    assert "Step 5 — Cross-marker pattern detection" in html
 
 
 def test_trace_to_chat_messages_shape():

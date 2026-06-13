@@ -204,7 +204,7 @@ except ImportError:  # Local development without the HF Spaces package.
     spaces = _SpacesFallback()  # type: ignore[assignment]
 
 
-@spaces.GPU(duration=120)
+@spaces.GPU(duration=180)
 def _run_zerogpu_generation(
     messages: list[dict[str, Any]],
     model_source: TransformersModelSource,

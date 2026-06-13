@@ -10,6 +10,31 @@ from pathlib import Path
 from html import escape
 from typing import Any
 
+
+def _patch_asyncio_event_loop_del() -> None:
+    """Suppress Gradio 6 asyncio GC noise on Hugging Face Spaces (Python 3.10)."""
+    try:
+        import asyncio.base_events as base_events
+
+        original_del = getattr(base_events.BaseEventLoop, "__del__", None)
+        if original_del is None or getattr(original_del, "_bte_patched", False):
+            return
+
+        def patched_del(self) -> None:
+            try:
+                original_del(self)
+            except ValueError as exc:
+                if str(exc) != "Invalid file descriptor: -1":
+                    raise
+
+        patched_del._bte_patched = True  # type: ignore[attr-defined]
+        base_events.BaseEventLoop.__del__ = patched_del  # type: ignore[method-assign]
+    except Exception:
+        pass
+
+
+_patch_asyncio_event_loop_del()
+
 import gradio as gr
 
 from src.extraction import build_extractor
@@ -1139,14 +1164,35 @@ gradio-app,
   margin-bottom: 10px !important;
 }
 
-.bte-title {
+.bte-title-rail,
+.bte-title-rail.block,
+.bte-title-rail > div,
+.bte-title-rail .form,
+.bte-title-rail.gr-group {
   width: var(--bte-rail) !important;
   max-width: var(--bte-rail) !important;
-  margin: 0 auto 18px !important;
+  margin-left: auto !important;
+  margin-right: auto !important;
+  padding: 0 !important;
+  background: transparent !important;
+  border: 0 !important;
+  box-shadow: none !important;
+  overflow: visible !important;
+}
+
+.gradio-container .column:has(.bte-title-rail),
+.gradio-container .column:has(> .row.bte-title) {
+  overflow: visible !important;
+}
+
+.bte-title {
+  width: 100% !important;
+  max-width: 100% !important;
+  margin: 0 0 18px !important;
   padding: 28px 28px 26px;
-  display: grid;
-  grid-template-columns: minmax(0, 1.05fr) minmax(250px, 0.95fr) minmax(250px, 0.9fr);
-  gap: 24px 28px;
+  display: grid !important;
+  grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+  gap: 0 !important;
   align-items: stretch;
   border: 1px solid rgba(255, 255, 255, 0.42);
   border-radius: var(--bte-radius);
@@ -1154,6 +1200,21 @@ gradio-app,
     linear-gradient(120deg, rgba(191, 52, 52, 0.82) 0%, rgba(37, 99, 235, 0.95) 58%, rgba(18, 128, 92, 0.98) 100%),
     #12805c;
   box-shadow: var(--bte-shadow-strong);
+}
+
+.bte-title.row,
+.bte-title > .column,
+.bte-title > div > .column,
+.bte-title .column.bte-title-copy,
+.bte-title .column.bte-title-hackathon-wrap,
+.bte-title .column.bte-title-credits-wrap {
+  flex: none !important;
+  flex-grow: 0 !important;
+  flex-shrink: 0 !important;
+  flex-basis: auto !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: none !important;
 }
 
 .bte-title h1,
@@ -1188,15 +1249,15 @@ gradio-app,
 .bte-title-copy {
   text-align: left;
   justify-self: stretch;
-  padding-right: 24px;
+  padding: 0 24px 0 0;
 }
 
 .bte-title-hackathon-wrap {
-  padding-right: 24px;
+  padding: 0 24px;
 }
 
 .bte-title-credits-wrap {
-  padding-left: 4px;
+  padding: 0 0 0 24px;
 }
 
 .bte-title-copy::after,
@@ -2087,35 +2148,10 @@ gradio-app,
   box-sizing: border-box;
 }
 
-.bte-trace-panel-header {
-  flex: 0 0 auto;
-  padding: 0 4px 10px;
-  border-bottom: 1px solid var(--bte-line);
-  margin-bottom: 10px;
-}
-
-.bte-trace-panel-header strong {
-  display: block;
-  color: var(--bte-ink);
-  font-size: 18px;
-  line-height: 1.25;
-  padding: 0 2px;
-  overflow: visible;
-  word-break: normal;
-}
-
-.bte-trace-subtitle {
-  margin: 6px 0 0;
-  padding: 0 2px;
-  color: var(--bte-muted);
-  font-size: 13px;
-  line-height: 1.45;
-}
-
 .bte-trace-steps {
   flex: 1 1 auto;
   min-height: 0;
-  max-height: calc(430px - 32px - 92px);
+  max-height: calc(430px - 32px - 16px);
   overflow-x: hidden;
   overflow-y: auto !important;
   overscroll-behavior: contain;
@@ -2179,6 +2215,12 @@ gradio-app,
   color: #b42318;
   background: #fef3f2;
   border: 1px solid #fecdca;
+}
+
+.bte-trace-status--pending {
+  color: #667085;
+  background: #f9fafb;
+  border: 1px solid #d0d5dd;
 }
 
 .bte-trace-status--unknown {
@@ -4288,21 +4330,22 @@ with gr.Blocks(title="Blood Test Explainer") as demo:
         "<style>.bte-report-panel,.bte-report-panel>*{background:transparent !important;"
         "border:0 !important;box-shadow:none !important;padding:0 !important;}</style>"
     )
-    with gr.Row(equal_height=True, elem_classes=["bte-title"]):
-        with gr.Column(scale=2, min_width=260, elem_classes=["bte-title-copy"]):
-            gr.HTML(
-                """
-                <div>
-                  <p class="bte-kicker">Clinical clarity from raw documents</p>
-                  <h1>Blood Test Explainer</h1>
-                  <p>Upload a lab report and turn dense medical paperwork into a polished health report with extracted values, age and sex context, and knowledge graph explanations.</p>
-                </div>
-                """
-            )
-        with gr.Column(scale=2, min_width=250, elem_classes=["bte-title-hackathon-wrap"]):
-            gr.HTML(hero_hackathon_panel_html())
-        with gr.Column(scale=0, min_width=260, elem_classes=["bte-title-credits-wrap"]):
-            gr.HTML(hero_attribution_html())
+    with gr.Group(elem_classes=["bte-title-rail"]):
+        with gr.Row(equal_height=True, elem_classes=["bte-title"]):
+            with gr.Column(scale=1, min_width=0, elem_classes=["bte-title-copy"]):
+                gr.HTML(
+                    """
+                    <div>
+                      <p class="bte-kicker">Clinical clarity from raw documents</p>
+                      <h1>Blood Test Explainer</h1>
+                      <p>Upload a lab report and turn dense medical paperwork into a polished health report with extracted values, age and sex context, and knowledge graph explanations.</p>
+                    </div>
+                    """
+                )
+            with gr.Column(scale=1, min_width=0, elem_classes=["bte-title-hackathon-wrap"]):
+                gr.HTML(hero_hackathon_panel_html())
+            with gr.Column(scale=1, min_width=0, elem_classes=["bte-title-credits-wrap"]):
+                gr.HTML(hero_attribution_html())
 
     workflow_phase = gr.HTML(
         workflow_phase_html("ready"),
@@ -4322,7 +4365,7 @@ with gr.Blocks(title="Blood Test Explainer") as demo:
           </div>
           <div class="bte-step-heading bte-step-heading--report">
             <span>3</span>
-            <h2>Review the agent pipeline steps for your blood tests</h2>
+            <h2>Review agents' steps and the blood test report</h2>
           </div>
         </div>
         """,

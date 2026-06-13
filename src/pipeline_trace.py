@@ -12,7 +12,6 @@ from src.interpretation import Interpretation, build_interpretation
 from src.openbmb_client import EXTRACTION_PROMPT, ExtractionResult
 
 _MAX_PREVIEW = 2400
-_TRACE_TITLE = "Agent pipeline trace"
 
 _PIPELINE_STEP_DEFS: tuple[tuple[str, str], ...] = (
     ("document_intake", "Step 1 — Document intake"),
@@ -245,6 +244,7 @@ def _status_badge(status: str) -> str:
         "complete": "bte-trace-status--complete",
         "running": "bte-trace-status--running",
         "failed": "bte-trace-status--failed",
+        "pending": "bte-trace-status--pending",
     }.get(status, "bte-trace-status--unknown")
     label = status.replace("_", " ").title()
     return f'<span class="bte-trace-status {css}">{html.escape(label)}</span>'
@@ -269,16 +269,9 @@ def _metrics_table(step: PipelineStep) -> str:
     return f'<dl class="bte-trace-meta">{cells}</dl>'
 
 
-def _trace_block(title: str, body: str, *, subtitle: str | None = None) -> str:
-    subtitle_html = (
-        f'<p class="bte-trace-subtitle">{html.escape(subtitle)}</p>' if subtitle else ""
-    )
+def _trace_block(body: str) -> str:
     return f"""
-    <section class="bte-trace-panel" aria-label="Agent pipeline trace">
-      <header class="bte-trace-panel-header">
-        <strong>{html.escape(title)}</strong>
-        {subtitle_html}
-      </header>
+    <section class="bte-trace-panel" aria-label="Agent actions">
       <div class="bte-trace-steps">
         {body}
       </div>
@@ -331,41 +324,49 @@ def step_to_html(step: PipelineStep) -> str:
     """
 
 
-def trace_to_html(steps: list[PipelineStep]) -> str:
-    body = "".join(step_to_html(step) for step in steps)
-    return _trace_block(
-        _TRACE_TITLE,
-        body,
-        subtitle="Expand any step to inspect status, return code, prompts, and outputs.",
-    )
-
-
-def empty_trace_html() -> str:
-    body = """
-    <p class="bte-trace-empty">
-      Upload a lab report to see every agent pipeline step here.
-    </p>
-    """
-    return _trace_block(_TRACE_TITLE, body)
-
-
-def processing_trace_html() -> str:
-    steps = [
+def _placeholder_pipeline_steps(
+    *,
+    status: str,
+    summary: str,
+    return_code: int | None = None,
+    pipeline_phase: str,
+) -> list[PipelineStep]:
+    return [
         PipelineStep(
             id=step_id,
             title=title,
-            status="running",
-            return_code=None,
-            summary="Waiting for upstream steps to finish…",
-            metadata={"pipeline_phase": "processing"},
+            status=status,
+            return_code=return_code,
+            summary=summary,
+            metadata={"pipeline_phase": pipeline_phase},
         )
         for step_id, title in _PIPELINE_STEP_DEFS
     ]
-    return _trace_block(
-        _TRACE_TITLE,
-        "".join(step_to_html(step) for step in steps),
-        subtitle="Pipeline running — reading your document and enriching results.",
+
+
+def trace_to_html(steps: list[PipelineStep]) -> str:
+    body = "".join(step_to_html(step) for step in steps)
+    return _trace_block(body)
+
+
+def empty_trace_html() -> str:
+    steps = _placeholder_pipeline_steps(
+        status="pending",
+        summary="Waiting for a lab report upload to start analysis.",
+        return_code=None,
+        pipeline_phase="ready",
     )
+    return trace_to_html(steps)
+
+
+def processing_trace_html() -> str:
+    steps = _placeholder_pipeline_steps(
+        status="running",
+        summary="Waiting for upstream steps to finish…",
+        return_code=None,
+        pipeline_phase="processing",
+    )
+    return trace_to_html(steps)
 
 
 def error_trace_html(message: str) -> str:
@@ -378,11 +379,7 @@ def error_trace_html(message: str) -> str:
         metadata={"pipeline_phase": "failed"},
     )
     body = step_to_html(failed_step)
-    return _trace_block(
-        _TRACE_TITLE,
-        body,
-        subtitle="Pipeline failed before the report could be generated.",
-    )
+    return _trace_block(body)
 
 
 def step_to_markdown(step: PipelineStep) -> str:
