@@ -13,6 +13,15 @@ startup_duration_timeout: 1h
 
 # Blood Test Explainer, teaching a 1.3B model to read your lab report, offline
 
+## Demo & links
+
+- ▶️ **Demo video:** <YOUTUBE_UNLISTED_URL>
+- 🌐 **Live Space:** [https://huggingface.co/spaces/build-small-hackathon/blood-test-explainer](https://huggingface.co/spaces/build-small-hackathon/blood-test-explainer)
+- 📓 **Write-up (Field Notes):** [https://huggingface.co/blog/build-small-hackathon/blood-test-explainer](https://huggingface.co/blog/build-small-hackathon/blood-test-explainer)
+- 💬 **Social post:** <LINKEDIN_URL>
+- 🤖 **Model:** [https://huggingface.co/build-small-hackathon/blood-test-minicpmv-4_6-medreason](https://huggingface.co/build-small-hackathon/blood-test-minicpmv-4_6-medreason)
+- 💻 **Code:** [https://github.com//blood-test-explainer](https://github.com/r0m4k/blood-test-explainer)
+
 We are **Roman and Dimitris**, graduates of the **American College of Greece (Deree) AI Lab**, where we currently do research. We built *Blood Test Explainer* for the Build Small hackathon. You upload a photo or PDF of a blood test, and a small model running entirely on the Space reads it, pulls out the markers, values and reference ranges, and explains what each one means in plain language, grounded in a medical knowledge base.
 
 **Our inspiration was a real problem for real people.** Almost everyone has stared at a lab report, seen a column of numbers and "H"/"L" flags, and had no idea what any of it meant. The information is right there, but it is locked in medical shorthand, and it is exactly the kind of private data you do not want to paste into a chatbot you do not control. We wanted a tool a parent or a neighbor could use on their own laptop, that reads the report, explains it honestly, and never sends their health data anywhere.
