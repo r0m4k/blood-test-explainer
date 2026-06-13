@@ -1,0 +1,30 @@
+{
+  "base": {
+    "model": "openbmb/MiniCPM-V-4.6",
+    "n": 2,
+    "precision": 0.8571428571428571,
+    "recall": 0.5294117647058824,
+    "f1": 0.6545454545454545,
+    "value_acc": 0.8333333333333334,
+    "unit_acc": 0.8888888888888888,
+    "status_acc": 0.6111111111111112,
+    "tp": 18,
+    "fp": 3,
+    "fn": 16,
+    "matched": 18
+  },
+  "finetuned": {
+    "model": "dimitriskl/blood-test-minicpmv-4_6-medreason",
+    "n": 2,
+    "precision": 0.8260869565217391,
+    "recall": 0.5588235294117647,
+    "f1": 0.6666666666666667,
+    "value_acc": 0.7368421052631579,
+    "unit_acc": 0.8947368421052632,
+    "status_acc": 0.631578947368421,
+    "tp": 19,
+    "fp": 4,
+    "fn": 15,
+    "matched": 19
+  }
+}
