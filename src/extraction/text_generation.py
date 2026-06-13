@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 
 from src.extraction.llamacpp_gpu import DEFAULT_GGUF_REPO, DEFAULT_MODEL_FILE
+from src.extraction.llamacpp_vision import DEFAULT_CHAT_HANDLER, DEFAULT_MMPROJ_FILE, llamacpp_vision_enabled
 from src.local_env import load_local_env
 
 load_local_env()
@@ -56,4 +57,7 @@ def _llamacpp_chat(messages: list[dict[str, str]], max_tokens: int) -> str:
         max_tokens=max_tokens,
         n_ctx=n_ctx,
         n_gpu_layers=n_gpu_layers,
+        vision_enabled=llamacpp_vision_enabled(),
+        mmproj_file=os.getenv("LLAMACPP_MMPROJ_FILE", DEFAULT_MMPROJ_FILE).strip(),
+        chat_handler=os.getenv("LLAMACPP_CHAT_HANDLER", DEFAULT_CHAT_HANDLER).strip(),
     )

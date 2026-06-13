@@ -10,7 +10,7 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
-DEFAULT_KNOWLEDGE_GRAPH_PATH = ROOT / "kb" / "cbc_knowledge_graph.json"
+DEFAULT_KNOWLEDGE_GRAPH_PATH = ROOT / "kb" / "cbc_knowledge_graph.json"  # lab-wide marker graph (107 tests)
 
 
 class LabKnowledgeGraph:

@@ -4,7 +4,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.openbmb_client import EXTRACTION_PROMPT, ExtractionResult
-from src.pipeline_trace import build_pipeline_trace, empty_trace_html, trace_to_html, trace_to_chat_messages
+from src.pipeline_trace import build_pipeline_trace, empty_trace_html, trace_hover_js, trace_to_html, trace_to_chat_messages
 from src.report_pipeline import build_health_report
 
 
@@ -76,7 +76,8 @@ def test_trace_to_html_collapsible_steps():
     steps = build_pipeline_trace(extraction, report)
     html = trace_to_html(steps, interactive=True)
     assert "bte-trace-step" in html
-    assert html.count('<details class="bte-trace-step">') == len(steps)
+    assert html.count("bte-trace-step-collapse") == len(steps)
+    assert '<details class="bte-trace-step">' not in html
     assert "bte-trace-status--complete" not in html
     assert "Return code" in html
     assert "Full prompt" in html
@@ -85,6 +86,7 @@ def test_trace_to_html_collapsible_steps():
     assert "This step gets your upload ready for the AI." in html
     assert "In this run:" in html
     assert 'data-interactive="true"' in html
+    assert "<script" not in html.lower()
 
 
 def test_completed_steps_include_technical_details():
@@ -106,6 +108,15 @@ def test_empty_trace_html_shows_pending_steps():
     assert "Step 5 — Cross-marker pattern detection" in html
     assert "Waiting for you to upload a lab report." not in html
     assert 'data-interactive="false"' in html
+
+
+def test_trace_hover_js_registers_listeners_once():
+    js = trace_hover_js()
+    assert "__bteTraceHoverInit" in js
+    assert "OPEN_DELAY_MS" in js
+    assert "is-open" in js
+    assert 'panel.dataset.interactive === "true"' in js
+    assert "<script" not in js.lower()
 
 
 def test_trace_to_chat_messages_shape():

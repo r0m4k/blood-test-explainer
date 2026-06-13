@@ -3,7 +3,8 @@
 `build_extractor()` returns the right backend for the environment:
   - **transformers** (default): local OpenBMB MiniCPM-V through Transformers.
   - **auto**: same as transformers.
-  - **llamacpp-gpu** / **llama-champion**: force GGUF through llama.cpp.
+  - **llamacpp-gpu** / **llama-champion**: force GGUF through llama.cpp. Set `LLAMACPP_VISION=1`
+    to run the same PDF/image vision pipeline as Transformers (requires mmproj).
   - **local**: local llama-server / llama.cpp backends for local experimentation.
 
 The hosted OpenBMB HTTP API is disabled.

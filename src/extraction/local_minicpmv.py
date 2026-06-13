@@ -28,6 +28,7 @@ import time
 from functools import lru_cache
 
 from src.document_processing import document_intake_metadata, document_to_payload_parts
+from src.extraction.llamacpp_vision import load_vision_llama
 from src.grammar import extraction_grammar
 from src.openbmb_client import (
     EXTRACTION_PROMPT,
@@ -75,7 +76,7 @@ class LocalMiniCPMVExtractor:
         return bool(self.model_path and self.mmproj_path)
 
     def extract(self, file_path: str, max_pages: int = 3) -> ExtractionResult:
-        llm = _load_model(
+        llm = load_vision_llama(
             self.model_path, self.mmproj_path, self.n_ctx, self.n_gpu_layers, self.chat_handler_name
         )
         parts = document_to_payload_parts(file_path, max_pages=max_pages)
@@ -119,30 +120,3 @@ def _grammar():
 
     return LlamaGrammar.from_string(extraction_grammar())
 
-
-@lru_cache(maxsize=2)
-def _load_model(model_path: str, mmproj_path: str, n_ctx: int, n_gpu_layers: int, handler_name: str):
-    """Load the GGUF + vision projector once and cache it (cold start is expensive)."""
-    try:
-        from llama_cpp import Llama
-        from llama_cpp import llama_chat_format
-    except ImportError as exc:  # pragma: no cover - optional heavy dep
-        raise ImportError(
-            "llama-cpp-python is not installed. Install it (see requirements.txt) to use the "
-            "local backend, or set EXTRACTOR_BACKEND=api."
-        ) from exc
-
-    handler_cls = getattr(llama_chat_format, handler_name, None)
-    if handler_cls is None:
-        raise RuntimeError(
-            f"Chat handler '{handler_name}' not found in llama_cpp.llama_chat_format. "
-            "Set LOCAL_CHAT_HANDLER to the handler matching your MiniCPM-V build."
-        )
-    chat_handler = handler_cls(clip_model_path=mmproj_path)
-    return Llama(
-        model_path=model_path,
-        chat_handler=chat_handler,
-        n_ctx=n_ctx,
-        n_gpu_layers=n_gpu_layers,
-        verbose=False,
-    )

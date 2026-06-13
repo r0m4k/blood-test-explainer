@@ -1,6 +1,40 @@
 # Deployment Log
 
+## 2026-06-13 — Opt-in llama.cpp vision + doc refresh
+
+Decision: keep **Transformers** as the default extraction backend; make llama.cpp an explicit,
+opt-in lane controlled by environment variables.
+
+Why:
+- PDF/image uploads always go through the vision document pipeline in `src/document_processing.py`.
+- The previous docs described `auto` falling back to CPU llama.cpp, but `AutoExtractor` now always
+  selects Transformers.
+- The hackathon **Llama Champion** badge still needs a GGUF path through `llama-cpp-python`.
+- Fine-tuned deployment may swap in a GGUF repo without changing the Gradio app.
+
+How to enable llama.cpp vision:
+
+```bash
+EXTRACTOR_BACKEND=llamacpp-gpu
+LLAMACPP_VISION=1
+LLAMACPP_GGUF_REPO=openbmb/MiniCPM-V-4.6-gguf
+LLAMACPP_MODEL_FILE=MiniCPM-V-4_6-Q4_K_M.gguf
+LLAMACPP_MMPROJ_FILE=mmproj-model-f16.gguf
+```
+
+Default production Space variables remain:
+
+```bash
+EXTRACTOR_BACKEND=transformers
+ZEROGPU_MODEL_ID=openbmb/MiniCPM-V-4.6
+```
+
+Docs updated: `README.md`, `RUNBOOK.md`, `DEPLOY.md`.
+
 ## 2026-06-13 — Route ZeroGPU to Transformers, CPU to llama.cpp
+
+> **Superseded** by the opt-in llama.cpp lane above. `auto` no longer auto-selects llama.cpp on
+> CPU; use `EXTRACTOR_BACKEND=llamacpp-gpu` explicitly when the GGUF lane is needed.
 
 Decision: keep `EXTRACTOR_BACKEND=auto`, but make ZeroGPU select the official OpenBMB
 Transformers backend instead of relying on app-level CUDA visibility.

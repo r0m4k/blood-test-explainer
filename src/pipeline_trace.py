@@ -362,44 +362,106 @@ def _metrics_table(step: PipelineStep) -> str:
     return f'<dl class="bte-trace-meta">{cells}</dl>'
 
 
-def _trace_hover_script() -> str:
+def trace_hover_js() -> str:
+    """Frontend JS for Gradio launch(); inline scripts in gr.HTML are stripped."""
     return """
-    <script>
-    (function () {
-      if (window.__bteTraceHoverInit) return;
-      window.__bteTraceHoverInit = true;
+(function () {
+  if (window.__bteTraceHoverInit) return;
+  window.__bteTraceHoverInit = true;
 
-      document.addEventListener("mouseover", function (event) {
-        var step = event.target.closest("details.bte-trace-step");
-        var panel = step && step.closest(".bte-trace-panel");
-        if (!step || !panel || panel.dataset.interactive !== "true") return;
-        step.open = true;
-      });
+  var OPEN_DELAY_MS = 180;
+  var CLOSE_DELAY_MS = 140;
+  var openTimers = new WeakMap();
+  var closeTimers = new WeakMap();
 
-      document.addEventListener("mouseout", function (event) {
-        var step = event.target.closest("details.bte-trace-step");
-        var panel = step && step.closest(".bte-trace-panel");
-        if (!step || !panel || panel.dataset.interactive !== "true") return;
-        if (step.contains(event.relatedTarget)) return;
-        if (step.dataset.pinned !== "1") step.open = false;
-      });
+  function isInteractiveStep(step) {
+    if (!step || !step.classList.contains("bte-trace-step")) return false;
+    if (step.classList.contains("bte-trace-step--locked")) return false;
+    var panel = step.closest(".bte-trace-panel");
+    return panel && panel.dataset.interactive === "true";
+  }
 
-      document.addEventListener("click", function (event) {
-        var summary = event.target.closest("summary.bte-trace-step-summary");
-        if (!summary) return;
-        var step = summary.closest("details.bte-trace-step");
-        var panel = step && step.closest(".bte-trace-panel");
-        if (!step || !panel || panel.dataset.interactive !== "true") {
-          event.preventDefault();
-          return;
-        }
-        window.requestAnimationFrame(function () {
-          step.dataset.pinned = step.open ? "1" : "0";
-        });
-      });
-    })();
-    </script>
-    """
+  function clearOpenTimer(step) {
+    var timer = openTimers.get(step);
+    if (timer) {
+      clearTimeout(timer);
+      openTimers.delete(step);
+    }
+  }
+
+  function clearCloseTimer(step) {
+    var timer = closeTimers.get(step);
+    if (timer) {
+      clearTimeout(timer);
+      closeTimers.delete(step);
+    }
+  }
+
+  function openStep(step) {
+    clearCloseTimer(step);
+    step.classList.add("is-open");
+  }
+
+  function closeStep(step) {
+    clearOpenTimer(step);
+    step.classList.remove("is-open");
+  }
+
+  function scheduleOpen(step) {
+    clearCloseTimer(step);
+    if (step.classList.contains("is-open")) return;
+    clearOpenTimer(step);
+    openTimers.set(
+      step,
+      window.setTimeout(function () {
+        openTimers.delete(step);
+        openStep(step);
+      }, OPEN_DELAY_MS)
+    );
+  }
+
+  function scheduleClose(step) {
+    if (step.dataset.pinned === "1") return;
+    clearOpenTimer(step);
+    clearCloseTimer(step);
+    closeTimers.set(
+      step,
+      window.setTimeout(function () {
+        closeTimers.delete(step);
+        closeStep(step);
+      }, CLOSE_DELAY_MS)
+    );
+  }
+
+  document.addEventListener("mouseover", function (event) {
+    var step = event.target.closest(".bte-trace-step");
+    if (!isInteractiveStep(step)) return;
+    scheduleOpen(step);
+  });
+
+  document.addEventListener("mouseout", function (event) {
+    var step = event.target.closest(".bte-trace-step");
+    if (!isInteractiveStep(step)) return;
+    if (step.contains(event.relatedTarget)) return;
+    scheduleClose(step);
+  });
+
+  document.addEventListener("click", function (event) {
+    var summary = event.target.closest(".bte-trace-step-summary");
+    if (!summary) return;
+    var step = summary.closest(".bte-trace-step");
+    if (!isInteractiveStep(step)) return;
+    event.preventDefault();
+    if (step.dataset.pinned === "1") {
+      step.dataset.pinned = "0";
+      closeStep(step);
+      return;
+    }
+    step.dataset.pinned = "1";
+    openStep(step);
+  });
+})();
+"""
 
 
 def _trace_block(body: str, *, interactive: bool = True) -> str:
@@ -411,7 +473,6 @@ def _trace_block(body: str, *, interactive: bool = True) -> str:
         {body}
       </div>
     </section>
-    {_trace_hover_script()}
     """
 
 
@@ -482,14 +543,16 @@ def step_to_html(step: PipelineStep, *, interactive: bool = True) -> str:
     </div>
     """
     return f"""
-    <details class="bte-trace-step">
-      <summary class="bte-trace-step-summary">
+    <div class="bte-trace-step" data-pinned="0">
+      <div class="bte-trace-step-summary" role="button" tabindex="0">
         <div class="bte-trace-step-heading">{title_html}</div>
-      </summary>
-      <div class="bte-trace-step-body">
-        {_step_body_sections(step)}
       </div>
-    </details>
+      <div class="bte-trace-step-collapse">
+        <div class="bte-trace-step-body">
+          {_step_body_sections(step)}
+        </div>
+      </div>
+    </div>
     """
 
 

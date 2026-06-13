@@ -4,7 +4,8 @@
   - `transformers` (default): local OpenBMB MiniCPM-V through Transformers.
   - `auto`: same as `transformers`.
   - `zerogpu` / `zero-gpu`: alias for `transformers`.
-  - `llamacpp-gpu` / `llama-champion`: llama.cpp GGUF badge path.
+  - `llamacpp-gpu` / `llama-champion`: llama.cpp GGUF badge path. Add `LLAMACPP_VISION=1`
+    for PDF/image vision via mmproj.
   - `local` / `server`: local llama-server backend for local development.
   - `llamacpp`: in-process llama-cpp-python backend for local development.
 
@@ -38,6 +39,14 @@ def build_extractor(model: str | None = None) -> Extractor:
     if backend in ("auto", "zerogpu", "zero-gpu", "transformers"):
         return AutoExtractor(model_id=model)
     if backend in ("llamacpp-gpu", "gpu-llamacpp", "llama-champion"):
+        from src.extraction.llamacpp_vision import llamacpp_vision_enabled
+
+        if llamacpp_vision_enabled():
+            print(
+                "[Blood Test Explainer] using llama.cpp vision extractor "
+                f"(repo={os.getenv('LLAMACPP_GGUF_REPO', 'openbmb/MiniCPM-V-4.6-gguf')})",
+                flush=True,
+            )
         return LlamaCppGPUExtractor()
     if backend in ("local", "server", "local-server"):
         return LocalServerExtractor()

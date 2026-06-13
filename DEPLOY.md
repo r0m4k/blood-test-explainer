@@ -1,16 +1,17 @@
 # Deploying the Space with ZeroGPU
 
-The active Hugging Face deployment is a **Gradio ZeroGPU Space**.
+The active Hugging Face deployment is a **Gradio ZeroGPU Space** with **Transformers vision** as the default extraction backend.
 
 This workflow is intentionally fixed:
 
 1. The Space must stay a Gradio Space, not a Docker Space.
-2. Runtime extraction should use the Transformers backend on ZeroGPU.
+2. Runtime extraction should use the Transformers backend on ZeroGPU by default.
 3. The extraction call must run behind `@spaces.GPU` so Hugging Face allocates ZeroGPU only while the model is needed.
 4. Model files must not be committed to the Space git repo.
 5. When the fine-tuned model is ready, replace only the model variables for the active lanes.
+6. The llama.cpp lane is optional and must be enabled explicitly with environment variables.
 
-Do not change this architecture unless the project intentionally gives up ZeroGPU. The intended future model-serving change is inserting the fine-tuned Transformers repository into `ZEROGPU_MODEL_ID`, and optionally inserting the fine-tuned GGUF repository into `LLAMACPP_*` for CPU fallback.
+Do not change this architecture unless the project intentionally gives up ZeroGPU. The intended future model-serving change is inserting the fine-tuned Transformers repository into `ZEROGPU_MODEL_ID`, and optionally inserting the fine-tuned GGUF repository into `LLAMACPP_*` for the llama.cpp lane.
 
 ## 1. Space Metadata
 
@@ -32,12 +33,12 @@ pinned: false
 
 ZeroGPU is Gradio-only on Hugging Face. It is not available for Docker Spaces, which is why the previous Docker + `llama-server` deployment was replaced.
 
-## 2. Model Serving
+## 2. Default Model Serving (Transformers)
 
-The active ZeroGPU model path is the official OpenBMB Transformers repo:
+The production Space path is the official OpenBMB Transformers repo:
 
 ```text
-EXTRACTOR_BACKEND=auto
+EXTRACTOR_BACKEND=transformers
 ZEROGPU_MODEL_ID=openbmb/MiniCPM-V-4.6
 ```
 
@@ -54,36 +55,66 @@ It uses:
 transformers.AutoModelForImageTextToText
 ```
 
-This is the correct runtime for a ZeroGPU Space because the GPU is allocated only inside the
-decorated worker. A normal app-level `torch.cuda.is_available()` check may be false before the
-worker starts, so `auto` also checks Hugging Face's `ACCELERATOR` runtime variable for values such
-as `zero-a10g`.
+This is the correct runtime for PDF/image blood-test uploads on ZeroGPU because the GPU is allocated only inside the decorated worker.
 
-The CPU fallback model path is the official OpenBMB GGUF repo running through llama.cpp:
+Aliases `auto`, `zerogpu`, and `zero-gpu` resolve to the same Transformers path in `src/extraction/factory.py`.
 
-```text
+## 3. Optional llama.cpp Lane
+
+The app ships a second extraction lane for hackathon badges and GGUF deployment experiments. It is **not enabled by default**.
+
+### Why it exists
+
+- **Llama Champion badge** — inference through `llama-cpp-python` over GGUF inside `@spaces.GPU`.
+- **Fine-tuned GGUF swap** — deploy a quantized model without changing the Gradio app structure.
+- **Text-only fallback** — lighter lane for plain-text lab exports when vision is not needed.
+
+For normal PDF/image uploads, keep `EXTRACTOR_BACKEND=transformers`.
+
+### Enable vision llama.cpp on the Space
+
+Set these variables in the Space settings:
+
+```bash
+EXTRACTOR_BACKEND=llamacpp-gpu
+LLAMACPP_VISION=1
+LLAMACPP_GGUF_REPO=openbmb/MiniCPM-V-4.6-gguf
+LLAMACPP_MODEL_FILE=MiniCPM-V-4_6-Q4_K_M.gguf
+LLAMACPP_MMPROJ_FILE=mmproj-model-f16.gguf
+LLAMACPP_CHAT_HANDLER=MiniCPMv26ChatHandler
+```
+
+Implementation: `src/extraction/llamacpp_gpu.py` with shared vision loading in `src/extraction/llamacpp_vision.py`.
+
+Without `LLAMACPP_VISION=1`, the llama.cpp lane accepts `.txt` / `.csv` only and rejects PDF/image uploads.
+
+### Enable text-only llama.cpp
+
+```bash
+EXTRACTOR_BACKEND=llamacpp-gpu
 LLAMACPP_GGUF_REPO=openbmb/MiniCPM-V-4.6-gguf
 LLAMACPP_MODEL_FILE=MiniCPM-V-4_6-Q4_K_M.gguf
 ```
 
-## 3. Future Fine-Tuned Model
+## 4. Future Fine-Tuned Model
 
 When the fine-tuned model is ready:
 
 1. Upload the fine-tuned Transformers checkpoint to a Hugging Face model repo.
-2. Optionally convert/quantize the fine-tuned model to GGUF for CPU fallback.
-3. Keep the same Gradio + ZeroGPU/CUDA Transformers + CPU llama.cpp architecture.
+2. Optionally convert/quantize the fine-tuned model to GGUF (+ mmproj) for the llama.cpp lane.
+3. Keep the same Gradio + ZeroGPU architecture.
 4. Change only these variables:
 
 ```bash
 ZEROGPU_MODEL_ID=<owner>/<fine-tuned-minicpm-v-transformers-repo>
 LLAMACPP_GGUF_REPO=<owner>/<fine-tuned-minicpm-v-gguf-repo>
 LLAMACPP_MODEL_FILE=<fine-tuned-model>.gguf
+LLAMACPP_MMPROJ_FILE=<mmproj-file>.gguf
 ```
 
 Do not add model files to the Space git repo. Do not reintroduce Docker or `llama-server` for the ZeroGPU deployment.
 
-## 4. Why This Architecture
+## 5. Why This Architecture
 
 The Docker path failed on free CPU hardware with `OOMKilled` during build. ZeroGPU is only available for Gradio SDK Spaces, so the deployment must be a Gradio Space to use the free dynamic GPU resource.
 
@@ -91,17 +122,24 @@ This architecture keeps:
 
 - Free ZeroGPU eligibility.
 - No external hosted inference API calls.
-- The official OpenBMB Transformers runtime on ZeroGPU.
-- A CPU `llama.cpp` / GGUF fallback when the Space is not on ZeroGPU or CUDA.
+- The official OpenBMB Transformers runtime on ZeroGPU for PDF/image lab reports.
+- An optional llama.cpp / GGUF lane for badges and fine-tuned GGUF deployment.
 - A clean future swap to a fine-tuned model by changing only `ZEROGPU_MODEL_ID` and optional `LLAMACPP_*` variables.
 
-## 5. Local Development
+## 6. Local Development
 
-Local development can run the same backend, although the model may be slow or too large without a local GPU:
+Default (Transformers vision):
 
 ```bash
 pip install -r requirements.txt
-EXTRACTOR_BACKEND=auto python app.py
+python app.py
+```
+
+Optional llama.cpp vision:
+
+```bash
+pip install -r requirements.txt
+EXTRACTOR_BACKEND=llamacpp-gpu LLAMACPP_VISION=1 python app.py
 ```
 
 For quick UI-only work, continue using the static reference report without triggering extraction.

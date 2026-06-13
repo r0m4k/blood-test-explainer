@@ -45,6 +45,7 @@ from src.pipeline_trace import (
     empty_trace_html,
     error_trace_html,
     processing_trace_html,
+    trace_hover_js,
     trace_to_html,
 )
 from src.report_pipeline import build_health_report
@@ -2336,16 +2337,41 @@ gradio-app,
   padding: 10px 12px;
   cursor: pointer;
   list-style: none;
-  transition: background-color 0.15s ease;
+  transition: background-color 0.22s ease, border-color 0.22s ease;
 }
 
-.bte-trace-step-summary:hover,
-.bte-trace-step[open] .bte-trace-step-summary {
+.bte-trace-panel[data-interactive="true"] .bte-trace-step-summary:hover,
+.bte-trace-panel[data-interactive="true"] .bte-trace-step.is-open .bte-trace-step-summary {
   background: #f8fbff;
 }
 
-.bte-trace-step[open] .bte-trace-step-summary {
+.bte-trace-panel[data-interactive="true"] .bte-trace-step.is-open .bte-trace-step-summary {
   border-bottom: 1px solid #eef2f7;
+}
+
+.bte-trace-step-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.34s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.bte-trace-panel[data-interactive="true"] .bte-trace-step.is-open .bte-trace-step-collapse {
+  grid-template-rows: 1fr;
+}
+
+.bte-trace-step-collapse > .bte-trace-step-body {
+  overflow: hidden;
+  min-height: 0;
+  transform: translateY(-6px);
+  opacity: 0;
+  transition:
+    transform 0.34s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.28s ease;
+}
+
+.bte-trace-panel[data-interactive="true"] .bte-trace-step.is-open .bte-trace-step-collapse > .bte-trace-step-body {
+  transform: translateY(0);
+  opacity: 1;
 }
 
 .bte-trace-step-heading {
@@ -4650,4 +4676,4 @@ with gr.Blocks(title="Blood Test Explainer") as demo:
 
 if __name__ == "__main__":
     _boot_log("launching Gradio demo")
-    demo.launch(css=CUSTOM_CSS)
+    demo.launch(css=CUSTOM_CSS, js=trace_hover_js())

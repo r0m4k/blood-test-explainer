@@ -91,6 +91,14 @@ def test_knowledge_graph_has_sex_guidance_for_every_marker():
     assert all("sex_specific_statistics_per_group_age" in test for test in high)
 
 
+def test_all_canonical_markers_resolve_in_knowledge_graph():
+    graph = LabKnowledgeGraph.load()
+    from src.markers import MARKERS
+
+    missing = [marker.name for marker in MARKERS if graph.resolve(marker.name) is None]
+    assert missing == []
+
+
 def test_report_knowledge_payload_includes_video_url():
     report = build_health_report(
         _result(
