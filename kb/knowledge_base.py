@@ -110,6 +110,11 @@ KB: dict[str, MarkerKB] = {
         low="A low basophil count is usually not significant.",
         questions=("Is this a persistent finding worth rechecking?",),
     ),
+    "Band Neutrophils Percent": MarkerKB(
+        high="A high band neutrophil percentage may suggest a left shift, often seen when the marrow is releasing immature neutrophils during infection, inflammation, or physiologic stress.",
+        low="A low band neutrophil percentage is usually expected and not clinically significant on its own.",
+        questions=("Does this fit with my total WBC and absolute neutrophil count?",),
+    ),
     "Reticulocyte Count": MarkerKB(
         high="A high reticulocyte count means the marrow is making extra red cells, often after blood loss or hemolysis.",
         low="A low reticulocyte count in anemia suggests the marrow is not keeping up with red-cell need.",
@@ -132,7 +137,7 @@ KB: dict[str, MarkerKB] = {
     ),
     # --- Metabolic panel ---
     "Glucose": MarkerKB(
-        high="An elevated fasting glucose can indicate prediabetes or diabetes, or simply that the sample was not fasting.",
+        high="An elevated fasting or random glucose can indicate prediabetes or diabetes, or simply that the sample timing and recent food intake matter.",
         low="A low glucose can cause shakiness or lightheadedness and may relate to fasting, medications, or how the sample was handled.",
         questions=("Was this a fasting sample?", "Should we confirm with an HbA1c?"),
     ),
@@ -187,8 +192,8 @@ KB: dict[str, MarkerKB] = {
         questions=("Does the albumin/globulin ratio need follow-up?",),
     ),
     "Bicarbonate": MarkerKB(
-        high="A high bicarbonate may reflect metabolic alkalosis or compensation for lung issues.",
-        low="A low bicarbonate may reflect metabolic acidosis or severe diarrhea.",
+        high="A high bicarbonate or total CO2 may reflect metabolic alkalosis or compensation for lung/respiratory issues.",
+        low="A low bicarbonate or total CO2 may reflect metabolic acidosis, severe diarrhea, or other acid-base stress.",
         questions=("Does this fit with my other electrolytes and symptoms?",),
     ),
     "Anion Gap": MarkerKB(
@@ -204,7 +209,7 @@ KB: dict[str, MarkerKB] = {
     "Phosphate": MarkerKB(
         high="A high phosphate may relate to kidney disease, low parathyroid activity, or cell breakdown.",
         low="A low phosphate may relate to malnutrition, alcohol, or overcorrection of vitamin D.",
-        questions=("Does this fit with my calcium and kidney results?",),
+        questions=("Does this fit with my calcium, PTH, vitamin D, and kidney results?",),
     ),
     "Uric Acid": MarkerKB(
         high="A high uric acid is associated with gout and kidney stones and may rise with diet, alcohol, or kidney disease.",
@@ -293,22 +298,22 @@ KB: dict[str, MarkerKB] = {
     ),
     # --- Liver enzymes ---
     "ALT": MarkerKB(
-        high="ALT is fairly liver-specific; elevations can follow fatty liver, alcohol, medications, or viral hepatitis.",
+        high="ALT is usually interpreted as a liver enzyme, but it can also rise with skeletal muscle injury; fatty liver, alcohol, medications, viral hepatitis, CK, AST, and GGT help provide context.",
         low="A low ALT is not typically a concern.",
         questions=("Could a medication or fatty liver explain this?", "Should we recheck in a few weeks?"),
     ),
     "AST": MarkerKB(
-        high="AST rises with liver stress but also comes from muscle; the AST/ALT pattern helps point to a cause.",
+        high="AST rises with liver stress but also comes from skeletal muscle; CK and GGT can help separate muscle from liver or bile-duct patterns.",
         low="A low AST is not typically a concern.",
         questions=("Does the AST/ALT ratio suggest a specific cause?",),
     ),
     "ALP": MarkerKB(
         high="A high alkaline phosphatase can come from the liver/bile ducts or from bone; growth and pregnancy also raise it.",
         low="A low ALP is uncommon and rarely significant.",
-        questions=("Is this from my liver or my bones?",),
+        questions=("Is this from my liver or my bones, and does GGT help clarify it?",),
     ),
     "GGT": MarkerKB(
-        high="GGT is sensitive to bile-duct issues and alcohol; it helps clarify whether a high ALP is from the liver.",
+        high="GGT is sensitive to bile-duct issues and alcohol; it helps clarify whether a high ALP is liver-related, while a normal GGT with high ALP can point more toward bone or skeletal sources.",
         low="A low GGT is not a concern.",
         questions=("Does my GGT help explain my ALP?",),
     ),
@@ -455,6 +460,11 @@ KB: dict[str, MarkerKB] = {
         low="A low vitamin E level may occur with fat malabsorption and can affect nerves and red cells.",
         questions=("Could fat absorption or supplements explain this?",),
     ),
+    "Coenzyme Q10": MarkerKB(
+        high="A high CoQ10 level is most often supplement-related and may also track with lipoprotein levels.",
+        low="A low CoQ10 level may reflect nutritional status, medication context such as statins, or mitochondrial/neuromuscular evaluation context.",
+        questions=("Am I taking CoQ10 or statin therapy?", "Is this being monitored for a mitochondrial or neuromuscular reason?"),
+    ),
     "HbA1c": MarkerKB(
         high="A high HbA1c reflects higher average blood sugar over ~3 months and is used to screen for prediabetes and diabetes.",
         low="A low HbA1c is generally not a concern.",
@@ -564,9 +574,9 @@ KB: dict[str, MarkerKB] = {
         questions=("Was chest pain or pressure present when this was drawn?",),
     ),
     "Creatine Kinase": MarkerKB(
-        high="A high CK may reflect muscle injury from exercise, trauma, statins, or heart muscle damage.",
+        high="A high CK may reflect skeletal muscle injury from exercise, trauma, statins, or neuromuscular disease; it can also rise with heart muscle damage in the right context.",
         low="A low CK is not typically significant.",
-        questions=("Did I exercise heavily before the blood draw?", "Am I on a statin?"),
+        questions=("Did I exercise heavily before the blood draw?", "Am I on a statin?", "Is there known muscle disease or weakness?"),
     ),
     "CK-MB": MarkerKB(
         high="A high CK-MB raises concern for heart-muscle injury when troponin is also elevated.",
@@ -594,6 +604,11 @@ KB: dict[str, MarkerKB] = {
         low="A low testosterone may cause fatigue, low libido, or muscle loss in men.",
         questions=("Could symptoms match my testosterone level?",),
     ),
+    "Free Testosterone": MarkerKB(
+        high="A high free testosterone may reflect androgen exposure or increased androgen production; interpretation depends strongly on sex, age, symptoms, and SHBG.",
+        low="A low free testosterone may relate to hypogonadism, pituitary signaling, chronic illness, steroid exposure, or high SHBG.",
+        questions=("How does this compare with total testosterone, SHBG, LH, and FSH?",),
+    ),
     "Estradiol": MarkerKB(
         high="A high estradiol may relate to ovarian function, obesity, or hormone therapy.",
         low="A low estradiol may relate to menopause, ovarian failure, or low body weight.",
@@ -620,7 +635,7 @@ KB: dict[str, MarkerKB] = {
         questions=("What day of my cycle was this drawn?",),
     ),
     "Parathyroid Hormone": MarkerKB(
-        high="A high PTH may drive calcium up in primary hyperparathyroidism or rise appropriately when calcium is low.",
+        high="A high PTH may drive calcium up in primary hyperparathyroidism or rise appropriately when calcium is low, phosphate is shifted, or vitamin D is low.",
         low="A low PTH may appear after parathyroid surgery or with high calcium from other causes.",
         questions=("How does PTH fit with my calcium and vitamin D?",),
     ),
@@ -658,6 +673,11 @@ KB: dict[str, MarkerKB] = {
         high="A high IGF-1 may reflect excess growth hormone.",
         low="A low IGF-1 may reflect growth-hormone deficiency or malnutrition.",
         questions=("Are height, hands, or jaw changes relevant?",),
+    ),
+    "IGF Binding Protein-3": MarkerKB(
+        high="A high IGFBP-3 can accompany increased growth-hormone activity but must be interpreted with age, puberty stage, IGF-1, and lab method.",
+        low="A low IGFBP-3 may support reduced growth-hormone activity or malnutrition when it matches IGF-1 and growth history.",
+        questions=("Does this match IGF-1 and growth-pattern concerns?",),
     ),
     # --- Oncology / screening ---
     "PSA": MarkerKB(

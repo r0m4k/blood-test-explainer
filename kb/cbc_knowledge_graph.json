@@ -266,7 +266,7 @@
       "category": "Liver",
       "unit": "U/L",
       "description": "ALT measures liver enzyme released when liver cells are stressed.",
-      "why_important": "ALT is fairly liver-specific; elevations can follow fatty liver, alcohol, medications, or viral hepatitis. A low ALT is not typically a concern.",
+      "why_important": "ALT is usually interpreted as a liver enzyme, but it can also rise with skeletal muscle injury; fatty liver, alcohol, medications, viral hepatitis, CK, AST, and GGT help provide context. A low ALT is not typically a concern.",
       "sex_significance": {
         "level": "low",
         "summary": "This marker is usually interpreted with age and lab method rather than sex-specific reference intervals.",
@@ -882,7 +882,7 @@
       "category": "Liver",
       "unit": "U/L",
       "description": "AST measures enzyme from liver and muscle cells.",
-      "why_important": "AST rises with liver stress but also comes from muscle; the AST/ALT pattern helps point to a cause. A low AST is not typically a concern.",
+      "why_important": "AST rises with liver stress but also comes from skeletal muscle; CK and GGT can help separate muscle from liver or bile-duct patterns. A low AST is not typically a concern.",
       "sex_significance": {
         "level": "low",
         "summary": "This marker is usually interpreted with age and lab method rather than sex-specific reference intervals.",
@@ -927,6 +927,65 @@
       "related_tests": [],
       "source_ids": [],
       "video_url": "https://www.youtube.com/watch?v=7_-ZtM0TieA"
+    },
+    {
+      "id": "band_neutrophils_percent",
+      "display_name": "Band Neutrophils Percent",
+      "aliases": [
+        "Band Neutrophil %",
+        "Band Neutrophils",
+        "Band %",
+        "Bands",
+        "Stab Neutrophils"
+      ],
+      "category": "CBC",
+      "unit": "%",
+      "description": "Band Neutrophils Percent measures percentage of immature neutrophils in the white-cell differential.",
+      "why_important": "A high band neutrophil percentage may suggest a left shift, often seen when the marrow is releasing immature neutrophils during infection, inflammation, or physiologic stress. A low band neutrophil percentage is usually expected and not clinically significant on its own.",
+      "sex_significance": {
+        "level": "low",
+        "summary": "This marker is usually interpreted with age and lab method rather than sex-specific reference intervals.",
+        "pipeline_guidance": "Use the age-group interval unless the lab report provides a sex-specific range."
+      },
+      "instructions_to_improve": {
+        "food": [
+          "Support healthy blood production with balanced protein, iron, B12, folate, and vitamin C from whole foods.",
+          "Stay well hydrated unless a clinician advises fluid restriction."
+        ],
+        "exercises": [
+          "Use moderate activity as tolerated when blood counts are stable.",
+          "Avoid intense training if anemia, infection, or bleeding symptoms are present until evaluated."
+        ],
+        "supplements": [
+          "Discuss iron, B12, or folate supplementation only when testing supports a deficiency.",
+          "Do not start blood-building supplements without clinician guidance."
+        ]
+      },
+      "statistics_per_group_age": {
+        "child": {
+          "minimal_value": 0,
+          "normal_value": 3.0,
+          "maximum_value": 6
+        },
+        "teenager": {
+          "minimal_value": 0,
+          "normal_value": 3.0,
+          "maximum_value": 6
+        },
+        "adult": {
+          "minimal_value": 0,
+          "normal_value": 3.0,
+          "maximum_value": 6
+        },
+        "elder": {
+          "minimal_value": 0,
+          "normal_value": 3.0,
+          "maximum_value": 6
+        }
+      },
+      "related_tests": [],
+      "source_ids": [],
+      "video_url": "https://www.youtube.com/watch?v=AvVnjqShhWE"
     },
     {
       "id": "bas_absolute",
@@ -1232,7 +1291,7 @@
       "category": "Metabolic",
       "unit": "mmol/L",
       "description": "Bicarbonate measures main blood buffer for acid-base balance.",
-      "why_important": "A high bicarbonate may reflect metabolic alkalosis or compensation for lung issues. A low bicarbonate may reflect metabolic acidosis or severe diarrhea.",
+      "why_important": "A high bicarbonate or total CO2 may reflect metabolic alkalosis or compensation for lung/respiratory issues. A low bicarbonate or total CO2 may reflect metabolic acidosis, severe diarrhea, or other acid-base stress.",
       "sex_significance": {
         "level": "low",
         "summary": "This marker is usually interpreted with age and lab method rather than sex-specific reference intervals.",
@@ -1894,6 +1953,66 @@
       "video_url": "https://www.youtube.com/watch?v=udVccTOnmrM"
     },
     {
+      "id": "coenzyme_q10",
+      "display_name": "Coenzyme Q10",
+      "aliases": [
+        "CoQ10",
+        "Coenzyme Q 10",
+        "Total Coenzyme Q10",
+        "Total Coenzyme Q 10",
+        "CoQ10 Profile",
+        "Total CoQ10"
+      ],
+      "category": "Vitamin",
+      "unit": "mcg/L",
+      "description": "Coenzyme Q10 measures mitochondrial electron-transport cofactor and antioxidant.",
+      "why_important": "A high CoQ10 level is most often supplement-related and may also track with lipoprotein levels. A low CoQ10 level may reflect nutritional status, medication context such as statins, or mitochondrial/neuromuscular evaluation context.",
+      "sex_significance": {
+        "level": "low",
+        "summary": "This marker is usually interpreted with age and lab method rather than sex-specific reference intervals.",
+        "pipeline_guidance": "Use the age-group interval unless the lab report provides a sex-specific range."
+      },
+      "instructions_to_improve": {
+        "food": [
+          "Correct deficiencies first with food sources such as fortified grains, dairy, eggs, fish, legumes, and leafy greens.",
+          "Pair nutrient-dense meals with safe sun exposure for vitamin D when appropriate."
+        ],
+        "exercises": [
+          "Use weight-bearing and muscle-strengthening activity to support bone and metabolic health.",
+          "Adjust activity if deficiency symptoms such as fatigue or neuropathy are present."
+        ],
+        "supplements": [
+          "Supplement only after testing confirms deficiency or insufficiency.",
+          "Use clinician-guided dosing, especially for iron, vitamin A, and fat-soluble vitamins."
+        ]
+      },
+      "statistics_per_group_age": {
+        "child": {
+          "minimal_value": 433,
+          "normal_value": 982.5,
+          "maximum_value": 1532
+        },
+        "teenager": {
+          "minimal_value": 433,
+          "normal_value": 982.5,
+          "maximum_value": 1532
+        },
+        "adult": {
+          "minimal_value": 433,
+          "normal_value": 982.5,
+          "maximum_value": 1532
+        },
+        "elder": {
+          "minimal_value": 433,
+          "normal_value": 982.5,
+          "maximum_value": 1532
+        }
+      },
+      "related_tests": [],
+      "source_ids": [],
+      "video_url": "https://www.youtube.com/watch?v=cy1LhxV6jHs"
+    },
+    {
       "id": "complement_c3",
       "display_name": "Complement C3",
       "aliases": [
@@ -2125,7 +2244,7 @@
       "category": "Cardiac",
       "unit": "U/L",
       "description": "Creatine Kinase measures enzyme from muscle including heart and skeletal.",
-      "why_important": "A high CK may reflect muscle injury from exercise, trauma, statins, or heart muscle damage. A low CK is not typically significant.",
+      "why_important": "A high CK may reflect skeletal muscle injury from exercise, trauma, statins, or neuromuscular disease; it can also rise with heart muscle damage in the right context. A low CK is not typically significant.",
       "sex_significance": {
         "level": "low",
         "summary": "This marker is usually interpreted with age and lab method rather than sex-specific reference intervals.",
@@ -3208,6 +3327,62 @@
       "video_url": "https://www.youtube.com/watch?v=IHaH9mlCdVY"
     },
     {
+      "id": "free_testosterone",
+      "display_name": "Free Testosterone",
+      "aliases": [
+        "Free T",
+        "Free Testosterone Level"
+      ],
+      "category": "Hormone",
+      "unit": "ng/dL",
+      "description": "Free Testosterone measures unbound testosterone available to tissues.",
+      "why_important": "A high free testosterone may reflect androgen exposure or increased androgen production; interpretation depends strongly on sex, age, symptoms, and SHBG. A low free testosterone may relate to hypogonadism, pituitary signaling, chronic illness, steroid exposure, or high SHBG.",
+      "sex_significance": {
+        "level": "low",
+        "summary": "This marker is usually interpreted with age and lab method rather than sex-specific reference intervals.",
+        "pipeline_guidance": "Use the age-group interval unless the lab report provides a sex-specific range."
+      },
+      "instructions_to_improve": {
+        "food": [
+          "Support hormone health with adequate protein, healthy fats, fiber, and micronutrients.",
+          "Avoid extreme dieting or rapid weight changes unless medically supervised."
+        ],
+        "exercises": [
+          "Use resistance training and sleep regularity to support hormonal balance.",
+          "Adjust training load during symptomatic hormone disorders."
+        ],
+        "supplements": [
+          "Avoid unsupervised hormone-boosting products.",
+          "Use prescribed hormone therapies only under endocrine or reproductive specialist guidance."
+        ]
+      },
+      "statistics_per_group_age": {
+        "child": {
+          "minimal_value": 5.25,
+          "normal_value": 12.97,
+          "maximum_value": 20.7
+        },
+        "teenager": {
+          "minimal_value": 5.25,
+          "normal_value": 12.97,
+          "maximum_value": 20.7
+        },
+        "adult": {
+          "minimal_value": 5.25,
+          "normal_value": 12.97,
+          "maximum_value": 20.7
+        },
+        "elder": {
+          "minimal_value": 5.25,
+          "normal_value": 12.97,
+          "maximum_value": 20.7
+        }
+      },
+      "related_tests": [],
+      "source_ids": [],
+      "video_url": "https://www.youtube.com/watch?v=yLuB8X8d_8o"
+    },
+    {
       "id": "fructosamine",
       "display_name": "Fructosamine",
       "aliases": [
@@ -3383,7 +3558,7 @@
       "category": "Liver",
       "unit": "U/L",
       "description": "GGT measures liver enzyme sensitive to bile and alcohol.",
-      "why_important": "GGT is sensitive to bile-duct issues and alcohol; it helps clarify whether a high ALP is from the liver. A low GGT is not a concern.",
+      "why_important": "GGT is sensitive to bile-duct issues and alcohol; it helps clarify whether a high ALP is liver-related, while a normal GGT with high ALP can point more toward bone or skeletal sources. A low GGT is not a concern.",
       "sex_significance": {
         "level": "low",
         "summary": "This marker is usually interpreted with age and lab method rather than sex-specific reference intervals.",
@@ -3493,12 +3668,15 @@
         "Blood Sugar",
         "FBS",
         "RBS",
-        "Fasting Blood Sugar"
+        "Fasting Blood Sugar",
+        "Random Glucose",
+        "Non-Fasting Glucose",
+        "Glucose Random Non-Fasting"
       ],
       "category": "Metabolic",
       "unit": "mg/dL",
       "description": "Glucose measures blood sugar level.",
-      "why_important": "An elevated fasting glucose can indicate prediabetes or diabetes, or simply that the sample was not fasting. A low glucose can cause shakiness or lightheadedness and may relate to fasting, medications, or how the sample was handled.",
+      "why_important": "An elevated fasting or random glucose can indicate prediabetes or diabetes, or simply that the sample timing and recent food intake matter. A low glucose can cause shakiness or lightheadedness and may relate to fasting, medications, or how the sample was handled.",
       "sex_significance": {
         "level": "low",
         "summary": "This marker is usually interpreted with age and lab method rather than sex-specific reference intervals.",
@@ -3675,7 +3853,8 @@
       "aliases": [
         "A1c",
         "Hemoglobin A1c",
-        "Glycated Hemoglobin"
+        "Glycated Hemoglobin",
+        "HgbA1C"
       ],
       "category": "Metabolic",
       "unit": "%",
@@ -4227,6 +4406,65 @@
       "video_url": "https://www.youtube.com/watch?v=_LKdNhF2WhI"
     },
     {
+      "id": "igfbp_3",
+      "display_name": "IGF Binding Protein-3",
+      "aliases": [
+        "IGFBP-3",
+        "IGFBP3",
+        "IGFbp3",
+        "Insulin-Like Growth Factor Binding Protein 3",
+        "Insulin-like Growth Factor-binding Protein 3"
+      ],
+      "category": "Hormone",
+      "unit": "mcg/mL",
+      "description": "IGF Binding Protein-3 measures major carrier protein for IGF-1 and marker of growth-hormone activity.",
+      "why_important": "A high IGFBP-3 can accompany increased growth-hormone activity but must be interpreted with age, puberty stage, IGF-1, and lab method. A low IGFBP-3 may support reduced growth-hormone activity or malnutrition when it matches IGF-1 and growth history.",
+      "sex_significance": {
+        "level": "low",
+        "summary": "This marker is usually interpreted with age and lab method rather than sex-specific reference intervals.",
+        "pipeline_guidance": "Use the age-group interval unless the lab report provides a sex-specific range."
+      },
+      "instructions_to_improve": {
+        "food": [
+          "Support hormone health with adequate protein, healthy fats, fiber, and micronutrients.",
+          "Avoid extreme dieting or rapid weight changes unless medically supervised."
+        ],
+        "exercises": [
+          "Use resistance training and sleep regularity to support hormonal balance.",
+          "Adjust training load during symptomatic hormone disorders."
+        ],
+        "supplements": [
+          "Avoid unsupervised hormone-boosting products.",
+          "Use prescribed hormone therapies only under endocrine or reproductive specialist guidance."
+        ]
+      },
+      "statistics_per_group_age": {
+        "child": {
+          "minimal_value": 3.1,
+          "normal_value": 5.5,
+          "maximum_value": 7.9
+        },
+        "teenager": {
+          "minimal_value": 3.1,
+          "normal_value": 5.5,
+          "maximum_value": 7.9
+        },
+        "adult": {
+          "minimal_value": 3.1,
+          "normal_value": 5.5,
+          "maximum_value": 7.9
+        },
+        "elder": {
+          "minimal_value": 3.1,
+          "normal_value": 5.5,
+          "maximum_value": 7.9
+        }
+      },
+      "related_tests": [],
+      "source_ids": [],
+      "video_url": "https://www.youtube.com/watch?v=qV2rkofqK1I"
+    },
+    {
       "id": "immunoglobulin_a",
       "display_name": "Immunoglobulin A",
       "aliases": [
@@ -4505,7 +4743,11 @@
       "id": "insulin",
       "display_name": "Insulin",
       "aliases": [
-        "Fasting Insulin"
+        "Fasting Insulin",
+        "Free Insulin",
+        "Total Insulin",
+        "Insulin Free",
+        "Insulin Total"
       ],
       "category": "Hormone",
       "unit": "uIU/mL",
@@ -5852,7 +6094,8 @@
       "aliases": [
         "Phosphorus",
         "PO4",
-        "Inorganic Phosphate"
+        "Inorganic Phosphate",
+        "Phosphorous"
       ],
       "category": "Metabolic",
       "unit": "mg/dL",
@@ -6367,7 +6610,7 @@
       "category": "Hormone",
       "unit": "pg/mL",
       "description": "Parathyroid Hormone measures hormone that regulates blood calcium.",
-      "why_important": "A high PTH may drive calcium up in primary hyperparathyroidism or rise appropriately when calcium is low. A low PTH may appear after parathyroid surgery or with high calcium from other causes.",
+      "why_important": "A high PTH may drive calcium up in primary hyperparathyroidism or rise appropriately when calcium is low, phosphate is shifted, or vitamin D is low. A low PTH may appear after parathyroid surgery or with high calcium from other causes.",
       "sex_significance": {
         "level": "low",
         "summary": "This marker is usually interpreted with age and lab method rather than sex-specific reference intervals.",
@@ -6420,7 +6663,8 @@
         "RBC",
         "Erythrocyte count",
         "Red cell count",
-        "Erythrocytes"
+        "Erythrocytes",
+        "Total RBC Count"
       ],
       "category": "CBC",
       "unit": "10^6/uL",
@@ -7966,7 +8210,9 @@
       "aliases": [
         "25-OH Vitamin D",
         "25-Hydroxyvitamin D",
-        "Vit D"
+        "Vit D",
+        "25 OH Vit D",
+        "25 Hydroxyvitamin D"
       ],
       "category": "Vitamin",
       "unit": "ng/mL",
@@ -8083,7 +8329,8 @@
         "Leukocytes",
         "WBC Count",
         "TLC",
-        "Total Leucocyte Count"
+        "Total Leucocyte Count",
+        "Total WBC Count"
       ],
       "category": "CBC",
       "unit": "10^3/uL",
@@ -8212,18 +8459,22 @@
     "anti_ccp_antibodies": "Rheumatoid arthritis overview; anti-CCP is correlated through RA evaluation.",
     "anti_mullerian_hormone": "Fertility hormone-testing overview includes AMH and ovarian-reserve timing.",
     "ast": "AST/ALT lab-values video covers AST directly alongside ALT.",
+    "band_neutrophils_percent": "Direct video on segmented versus band neutrophils.",
     "beta_hcg": "Reproductive-cycle overview is a broad pregnancy/reproductive hormone context; beta-hCG is not the primary topic.",
     "beta_hydroxybutyrate": "Diabetes/DKA overview covers ketone production; beta-hydroxybutyrate is not the only focus.",
     "ca_125": "Tumor-marker overview covers CA-125 with other markers.",
     "ca_15_3": "Direct CA 15-3 blood-test video; marker is for monitoring context rather than diagnosis.",
     "cea": "Tumor-marker overview covers CEA with other markers.",
     "ceruloplasmin": "Trace-mineral/copper overview; ceruloplasmin is linked to copper interpretation.",
+    "coenzyme_q10": "CoQ10 overview; closest available educational video for the CoQ10 marker rather than a lab-result-only lecture.",
     "copper": "Trace-mineral lab overview covering copper among other minerals.",
     "free_t3": "Free T3/Free T4 video focuses on free thyroid hormones together.",
+    "free_testosterone": "Direct free-versus-total testosterone video; marker interpretation still depends on sex, age, SHBG, and symptoms.",
     "fructosamine": "Diabetes overview; fructosamine is a shorter-term glycemic marker and is not the primary topic.",
     "gra_absolute": "WBC differential overview; granulocyte absolute combines neutrophils, eosinophils, and basophils.",
     "hct": "Hemoglobin/Hematocrit lab-values video covers hematocrit directly alongside hemoglobin.",
     "hdl_cholesterol": "HDL/LDL cholesterol video focuses on HDL in direct lipid-marker context.",
+    "igfbp_3": "Direct IGFBP-3 blood-test video.",
     "immunoglobulin_m": "IgG/IgM antibody-testing video covers IgM directly alongside IgG.",
     "mcv": "Anemia interpretation video uses MCV directly; also discusses MCH context.",
     "mpv": "FBC/CBC guide covers platelets; MPV is not discussed in detail.",
